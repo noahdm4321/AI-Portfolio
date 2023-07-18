@@ -1,139 +1,77 @@
-import os
-import random
+# Import the necessary functions from the Q-Learning model file
+from q_learning import get_state, get_action
 
-class MathEnv:
-    def __init__(self):
-        self.q_table = {}
-
-    def get_valid_moves(self, current_number):
-        valid_moves = []
-        for operation in ['+', '-', '*', '/']:
-            if operation in ['+', '-']:
-                numbers = range(1, 6)
-            else:
-                numbers = range(2, 6)
-            valid_moves.extend(
-                [
-                    (operation, number, current_number + number)
-                    if operation == '+'
-                    else (operation, number, current_number - number)
-                    if operation == '-'
-                    else (operation, number, current_number * number)
-                    if operation == '*'
-                    else (operation, number, current_number / number)
-                    for number in numbers
-                    if (result := current_number + number) <= 20 and result == int(result)
-                ]
-            )
-        return valid_moves
-
-    def update_q_table(self, state, action, next_state, reward):
-        if state not in self.q_table:
-            self.q_table[state] = {action: 0 for action in self.get_valid_moves(state)}
-        if next_state is not None:
-            next_q_values = self.q_table[next_state].values()
-            self.q_table[state][action] += 0.1 * (reward + 0.9 * max(next_q_values, default=0) - self.q_table[state][action])
+# Define the game parameters
+target_number = 20
 
 
-    def get_best_move(self, current_number):
-        valid_moves = self.get_valid_moves(current_number)
-        current_number_q_table = self.q_table.get(current_number, {})
-        return max(valid_moves, key=lambda move: current_number_q_table.get(move, 0))
+# Function to handle the human player's turn
+def human_player_turn(current_number):
+    print(f"\nCurrent number: {current_number}")
+    valid_input = False
+    while not valid_input:
+        operation = input("Choose an operation (+, -, *, /): ")
+        number = int(input("Choose a number (1-5 for + and -, 2-5 for * and /): "))
+        if operation in ["+", "-", "*", "/"] and (
+            (operation in ["+", "-"] and 1 <= number <= 5)
+            or (operation in ["*", "/"] and 2 <= number <= 5)
+        ):
+            valid_input = True
+        else:
+            print("Invalid input. Please try again.")
 
-class QLearningAgent:
-    def __init__(self):
-        self.q_table = {}
+    # Perform the chosen operation
+    if operation == "+":
+        next_number = current_number + number
+    elif operation == "-":
+        next_number = current_number - number
+    elif operation == "*":
+        next_number = current_number * number
+    elif operation == "/":
+        next_number = current_number // number
 
-    def choose_action(self, state):
-        if state not in self.q_table:
-            env = MathEnv()  # Create an instance of MathEnv
-            valid_moves = env.get_valid_moves(state)  # Call get_valid_moves on the instance
-            self.q_table[state] = {action: 0 for action in valid_moves}
-        return max(self.q_table[state], key=self.q_table[state].get)
+    # Print the math of the human player's move
+    print(f"Your move: {current_number} {operation} {number} = {next_number}")
 
-
-    def train(self, env, num_episodes):
-        for episode in range(num_episodes):
-            state = random.randint(1, 10)
-
-            while state != 20:
-                valid_moves = env.get_valid_moves(state)
-                if valid_moves:
-                    action = self.choose_action(state)
-                    next_state = random.choice(valid_moves)[2]
-                    reward = len(valid_moves)
-                    env.update_q_table(state, action, next_state, reward)
-                    state = next_state
-                else:
-                    break
+    return next_number
 
 
-            if (episode + 1) % 100 == 0:
-                print(f"Episode {episode + 1}/{num_episodes} completed.")
+# Function to play the game against the computer
+def play_game():
+    prev_number = 1
+    current_number = 1  # Start with 1
 
-        print("Training completed.")
-
-def main():
-    env = MathEnv()
-    agent = QLearningAgent()
-    
-    agent.train(env, num_episodes=10000)
-
-    current_number = 1
-
-    while current_number < 20:
-        print("\nCurrent number:", current_number)
-
-        # Player's turn
-        valid_move = False
-        while not valid_move:
-            player_input = input("Enter your move (ex. +2): ").strip()
-            operation = player_input[0]
-            number = int(player_input[1])
-
-            if operation in ['+', '-'] and number in range(1, 6):
-                result = current_number + number if operation == '+' else current_number - number
-            elif operation in ['*', '/'] and number in range(2, 6):
-                result = current_number * number if operation == '*' else current_number / number
-            else:
-                print("Invalid move. Try again.")
-                continue
-
-            if result > 20:
-                print(f"Invalid move! {current_number} {operation} {number} = {result} > 20\n")
-                print("Current number:", current_number)
-            elif result != int(result):
-                print(f"Invalid move! {current_number} {operation} {number} = {result} (not a whole number)\n")
-                print("Current number:", current_number)
-            else:
-                valid_move = True
-                print(f"{current_number} {operation} {number} = {result}")
-                current_number = int(result)
-
-        if current_number == 20:
-            print("Congratulations, you win!")
+    while current_number != target_number:
+        # Human player's turn
+        current_number = human_player_turn(current_number)
+        if current_number == target_number:
+            print("\nCongratulations! You won the game!")
             break
 
-        # Computer's turn
-        print("\nComputer's turn...")
-        operation, number, result = env.get_best_move(current_number)
-        print(f"{current_number} {operation} {number} = {result}")
-        current_number = result
+        # Computer player's turn
+        state = get_state(prev_number, current_number)
+        operation, number = get_action(state)
 
-        if current_number == 20:
-            print("I win! You lose! Haha.")
-            break
+        # Perform the chosen operation
+        if operation == "+":
+            next_number = current_number + number
+        elif operation == "-":
+            next_number = current_number - number
+        elif operation == "*":
+            next_number = current_number * number
+        elif operation == "/":
+            next_number = current_number // number
 
-        # Update Q-table after each round
-        valid_moves = env.get_valid_moves(current_number)
-        next_states = [(current_number, op, num) for op, num, _ in valid_moves]
-        reward = len(valid_moves)
-        for state in next_states:
-            agent.q_table[state] = {action: 0 for action in env.get_valid_moves(state)}
-        agent.update_q_table((current_number, operation, number), (operation, number), next_states[0], reward)
+        # Update the state for the next turn
+        prev_number = current_number
+        current_number = next_number
 
-    os.system("pause")
+        # Print the math of the computer player's move
+        print(f"Computer's move: {prev_number} {operation} {number} = {current_number}")
+
+        if current_number == target_number:
+            print("\nThe computer won the game!")
 
 
-if __name__ == "__main__":
-    main()
+# Play the game
+play_game()
