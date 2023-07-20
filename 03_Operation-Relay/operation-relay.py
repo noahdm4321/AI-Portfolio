@@ -10,10 +10,28 @@ class QLearningModel():
         self.num_range = list(range(1, 6))
         self.actions = [(op, num) for op in self.operations for num in self.num_range]
         self.q_table = {}
-        self.alpha = 0.2  # Learning rate
-        self.gamma = 0.9  # Discount factor
+        self.alpha = 0.1  # Learning rate
+        self.gamma = 0.8  # Discount factor
         self.epsilon = 0.1  # Exploration rate
 
+    def get_action(self, current_number):
+        # Get list of valid moves
+        valid_actions = [(op, num) for op, num in self.actions if self.check_valid_action(current_number, op, num)]
+        if current_number not in self.q_table:
+            self.q_table[current_number] = {action: 0 for action in valid_actions}
+
+        # Choose winning move if available
+        winning_moves = [(op, num) for op, num in valid_actions if self.check_winning_move(current_number, op, num)]
+        if winning_moves:
+            return random.choice(winning_moves)
+
+        if random.uniform(0, 1) < self.epsilon:
+            # Choose a random action
+            return random.choice(valid_actions)
+        else:
+            # Choose the action with the highest Q-value
+            return max(self.q_table[current_number], key=self.q_table[current_number].get)
+    
     def check_winning_move(self, current_number, operation, number):
         if operation == '*':
             next_number = current_number * number
@@ -21,25 +39,6 @@ class QLearningModel():
             next_number = current_number + number
 
         return next_number == target_number and next_number <= target_number and next_number != current_number
-
-
-    def get_action(self, current_number):
-        # Get list of valid moves
-        valid_actions = [(op, num) for op, num in self.actions if self.check_valid_action(current_number, op, num)]
-        if random.uniform(0, 1) < self.epsilon:
-            # Choose a random action
-            return random.choice(valid_actions)
-        else:
-            if current_number not in self.q_table:
-                self.q_table[current_number] = {action: 0 for action in valid_actions}
-
-            # Choose winning move if available
-            winning_moves = [(op, num) for op, num in valid_actions if self.check_winning_move(current_number, op, num)]
-            if winning_moves:
-                return random.choice(winning_moves)
-        
-            # Choose the action with the highest Q-value
-            return max(self.q_table[current_number], key=self.q_table[current_number].get)
 
     def check_valid_action(self, current_number, operation, number):
         if operation == '*':
@@ -49,17 +48,24 @@ class QLearningModel():
 
         return next_number <= target_number and next_number != current_number
 
-    def get_reward(self, current_number):
-        if current_number == target_number:
-            return 1  # Reward for winning the game
-        else:
-            return 0  # No reward
+    def update_q_values(self, moves, reward):
+        key_numbers = list(moves.keys())
+        for current_number, action in sorted(moves.items()):
+            operation, number = action
+            if key_numbers.index(current_number) < len(key_numbers) - 1:
+                next_number = key_numbers[key_numbers.index(current_number) + 1]
+                self.q_table[current_number][operation, number] += self.alpha * (reward + self.gamma * max(self.q_table[next_number].values()) - self.q_table[current_number][operation, number])
+            else:
+                self.q_table[current_number][operation, number] += self.alpha * (reward * 2 - self.q_table[current_number][operation, number])
 
     def q_learning(self):
         current_number = 1  # Start with 1
+        player = 1
+        p1_moves = {}
+        p2_moves = {}
+
         while current_number != target_number:
-            valid_actions = [(op, num) for op, num in self.actions if self.check_valid_action(current_number, op, num)]
-            operation, number = random.choice(valid_actions)
+            operation, number = self.get_action(current_number)
 
             # Update the state based on the chosen action
             if operation == '*':
@@ -67,19 +73,26 @@ class QLearningModel():
             elif operation == '+':
                 next_number = current_number + number
 
-            # Check if the action is valid (within the game rules)
-            if next_number <= target_number and next_number != current_number:
-                # Update the Q-value of the previous state-action pair
-                if current_number not in self.q_table:
-                    self.q_table[current_number] = {action: 0 for action in valid_actions}
-                if next_number not in self.q_table:
-                    self.q_table[next_number] = {action: 0 for action in valid_actions}
-                self.q_table[current_number][operation, number] += self.alpha * (
-                            self.get_reward(next_number) + self.gamma * max(self.q_table[next_number].values()) -
-                            self.q_table[current_number][operation, number])
+            # Add game data for the computer player's move
+            if player == 1:
+                p1_moves[current_number] = [operation, number]
+                player += 1
+            else:
+                p2_moves[current_number] = [operation, number]
+                player -= 1
 
-                # Move to the next state
-                current_number = next_number
+            # Update the Q-value of the previous state-action pair
+            if next_number == target_number:
+                if player == 2:  # Player 1 made winning move
+                    self.update_q_values(p1_moves, 1)
+                    self.update_q_values(p2_moves, 0)
+                else:  # PLayer 2 made winning move
+                    self.update_q_values(p1_moves, 0)
+                    self.update_q_values(p2_moves, 1)
+                break
+
+            # Move to the next state
+            current_number = next_number
 
     def train(self, num_episodes):
         for _ in range(num_episodes):
@@ -140,6 +153,8 @@ def play_game():
     while current_number != target_number:
         # Human player's turn
         operation, number = human_player_turn(current_number)
+        if current_number not in env.q_table or (operation, number) not in env.q_table[current_number]:
+            env.q_table[current_number] = {(operation, number): 0}
 
         # Perform the chosen operation
         if operation == "*":
@@ -154,22 +169,9 @@ def play_game():
         if next_number == target_number:
             print("\nCongratulations! You won the game!")
             player_score += 1
-            for current_number, action in sorted(hum_moves.items()):
-                numbers = list(hum_moves.keys())
-                operation, number = action
-                if numbers.index(current_number) < len(numbers) - 1:
-                    next_number = numbers[numbers.index(current_number) + 1]
-                    env.q_table[current_number][operation, number] += env.alpha * 100 * (env.get_reward(next_number) + env.gamma * max(env.q_table[next_number].values()) - env.q_table[current_number][operation, number])
-                else:
-                    env.q_table[current_number][operation, number] += (1 - env.q_table[current_number][operation, number])
-            for current_number, action in sorted(comp_moves.items()):
-                numbers = list(comp_moves.keys())
-                operation, number = action
-                if numbers.index(current_number) < len(numbers) - 1:
-                    next_number = numbers[numbers.index(current_number) + 1]
-                    env.q_table[current_number][operation, number] += env.alpha * 100 * (env.get_reward(next_number) + env.gamma * max(env.q_table[next_number].values()) - env.q_table[current_number][operation, number])
-                else:
-                    env.q_table[current_number][operation, number] += (0 - env.q_table[current_number][operation, number])
+            # Update the Q-Learning model using the game data
+            env.update_q_values(hum_moves, 10)
+            env.update_q_values(comp_moves, 0)
             break
 
         # Update the state for the next turn
@@ -192,22 +194,8 @@ def play_game():
             print("\nThe computer won the game!")
             computer_score += 1
             # Update the Q-Learning model using the game data
-            for current_number, action in sorted(comp_moves.items()):
-                numbers = list(comp_moves.keys())
-                operation, number = action
-                if numbers.index(current_number) < len(numbers) - 1:
-                    next_number = numbers[numbers.index(current_number) + 1]
-                    env.q_table[current_number][operation, number] += env.alpha * 100 * (env.get_reward(next_number) + env.gamma * max(env.q_table[next_number].values()) - env.q_table[current_number][operation, number])
-                else:
-                    env.q_table[current_number][operation, number] += (1 - env.q_table[current_number][operation, number])
-            for current_number, action in sorted(hum_moves.items()):
-                numbers = list(hum_moves.keys())
-                operation, number = action
-                if numbers.index(current_number) < len(numbers) - 1:
-                    next_number = numbers[numbers.index(current_number) + 1]
-                    env.q_table[current_number][operation, number] += env.alpha * 100 * (env.get_reward(next_number) + env.gamma * max(env.q_table[next_number].values()) - env.q_table[current_number][operation, number])
-                else:
-                    env.q_table[current_number][operation, number] += (0 - env.q_table[current_number][operation, number])
+            env.update_q_values(hum_moves, 0)
+            env.update_q_values(comp_moves, 10)
             break
 
         # Update the state for the next turn
@@ -215,15 +203,41 @@ def play_game():
 
 
 def main():
+    load = input("Do you want to load the winning strategy file? [yes]: ").lower()
+    if load in ['yes', 'y', '']:
+        # Load Q-values if available, or train the model
+        q_values_file = os.path.join(os.path.dirname(__file__), "q_values.pkl")
+
+        try:
+            env.load(q_values_file)
+            print("Loaded Q-values from file.")
+        except FileNotFoundError:
+            print("No existing Q-values found. Training the model...")
+            env.train(num_episodes=1000000)  # Train model
+            env.save(q_values_file)
+            print("Q-values saved to file.")
+
+        print("Finished! Let's play.")
+    else:
+        choice = input("Do you want to train a new model? [yes]: ").lower()
+        if choice in ['yes', 'y', '']:
+            print("Training the model...")
+            env.train(num_episodes=1000)  # Train model
+            print("Finished! Let's play.")
+        else:
+            print("Loading game with no training! Let's play.")
     play_game()
+
     while True:
         print(f"Current Score - You: {player_score} | Computer: {computer_score}")
         choice = input("Do you want to play again? [yes]: ").lower()
         if choice in ['yes', 'no', 'y', 'n', '']:
             if choice in ['yes', 'y', '']:
                 play_game()
-            else:
+            elif load in ['yes', 'y', '']:
                 env.save(q_values_file)
+                break
+            else:
                 break
         else:
             print("\nInvalid choice. Please try again.")
@@ -235,18 +249,4 @@ if __name__ == '__main__':
     player_score = 0
     computer_score = 0
     env = QLearningModel()
-
-    # Load Q-values if available, or train the model
-    q_values_file = os.path.join(os.path.dirname(__file__), "q_values.pkl")
-
-    try:
-        env.load(q_values_file)
-        print("Loaded Q-values from file.")
-    except FileNotFoundError:
-        print("No existing Q-values found. Training the model...")
-        env.train(num_episodes=10000000)  # Train model
-        env.save(q_values_file)
-        print("Q-values saved to file.")
-
-    print("Finished! Let's play.")
     main()
