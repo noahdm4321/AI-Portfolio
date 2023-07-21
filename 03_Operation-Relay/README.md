@@ -11,4 +11,6 @@
 5. The game continues until one player reaches the number 30. The first player to reach 30 wins the game.
 
 ## AI Showcase:
-##### This program involves transition models, knowledge-based agents, q-learning learning, and guided learning. 
+##### This program involves transition models, knowledge-based agents, q-learning learning models, and guided learning models. 
+
+###### Operation Relay is a game I came up with to prove that the code is designed by me. You will not be able to find this game anywhere else on the internet. 
