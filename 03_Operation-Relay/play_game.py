@@ -3,13 +3,16 @@ import pickle
 import random
 import os
 
+
 # Define Q-Learning method for AI
-class QLearningModel():
+class QLearningModel:
     def __init__(self):
         # Define the game parameters
-        self.operations = ['*', '+']  # Available mathematical operations
+        self.operations = ["*", "+"]  # Available mathematical operations
         self.num_range = list(range(1, 6))  # Allowed numbers to use in operations
-        self.actions = [(op, num) for op in self.operations for num in self.num_range]  # All possible actions (operation, number) pairs
+        self.actions = [
+            (op, num) for op in self.operations for num in self.num_range
+        ]  # All possible actions (operation, number) pairs
         self.q_table = {}  # Q-table to store state-action values
         self.alpha = 0.1  # Learning rate for Q-learning algorithm
         self.gamma = 0.8  # Discount factor for future rewards
@@ -17,12 +20,20 @@ class QLearningModel():
 
     def get_action(self, current_number):
         # Get list of valid moves for the given current number
-        valid_actions = [(op, num) for op, num in self.actions if self.check_valid_action(current_number, op, num)]
+        valid_actions = [
+            (op, num)
+            for op, num in self.actions
+            if self.check_valid_action(current_number, op, num)
+        ]
         if current_number not in self.q_table:
             self.q_table[current_number] = {action: 0 for action in valid_actions}
 
         # Choose winning move if available to end the game
-        winning_moves = [(op, num) for op, num in valid_actions if self.check_winning_move(current_number, op, num)]
+        winning_moves = [
+            (op, num)
+            for op, num in valid_actions
+            if self.check_winning_move(current_number, op, num)
+        ]
         if winning_moves:
             return random.choice(winning_moves)
 
@@ -32,22 +43,28 @@ class QLearningModel():
             return random.choice(valid_actions)
         else:
             # Choose the action with the highest Q-value for exploitation
-            return max(self.q_table[current_number], key=self.q_table[current_number].get)
-    
+            return max(
+                self.q_table[current_number], key=self.q_table[current_number].get
+            )
+
     def check_winning_move(self, current_number, operation, number):
         # Check if the given action leads to a winning move (reaching the target_number without exceeding it)
-        if operation == '*':
+        if operation == "*":
             next_number = current_number * number
-        elif operation == '+':
+        elif operation == "+":
             next_number = current_number + number
 
-        return next_number == target_number and next_number <= target_number and next_number != current_number
+        return (
+            next_number == target_number
+            and next_number <= target_number
+            and next_number != current_number
+        )
 
     def check_valid_action(self, current_number, operation, number):
         # Check if the given action is valid (does not exceed the target_number and does not result in the same number)
-        if operation == '*':
+        if operation == "*":
             next_number = current_number * number
-        elif operation == '+':
+        elif operation == "+":
             next_number = current_number + number
 
         return next_number <= target_number and next_number != current_number
@@ -60,10 +77,16 @@ class QLearningModel():
             if key_numbers.index(current_number) < len(key_numbers) - 1:
                 next_number = key_numbers[key_numbers.index(current_number) + 1]
                 # Q-value update using Q-learning algorithm
-                self.q_table[current_number][operation, number] += self.alpha * (reward + self.gamma * max(self.q_table[next_number].values()) - self.q_table[current_number][operation, number])
+                self.q_table[current_number][operation, number] += self.alpha * (
+                    reward
+                    + self.gamma * max(self.q_table[next_number].values())
+                    - self.q_table[current_number][operation, number]
+                )
             else:
                 # If the game is won, the last state-action pair gets a higher reward (game end)
-                self.q_table[current_number][operation, number] += self.alpha * (reward * 2 - self.q_table[current_number][operation, number])
+                self.q_table[current_number][operation, number] += self.alpha * (
+                    reward * 2 - self.q_table[current_number][operation, number]
+                )
 
     def q_learning(self):
         # Perform Q-learning to update the Q-table based on the game's state-action pairs
@@ -76,9 +99,9 @@ class QLearningModel():
             operation, number = self.get_action(current_number)
 
             # Update the state based on the chosen action
-            if operation == '*':
+            if operation == "*":
                 next_number = current_number * number
-            elif operation == '+':
+            elif operation == "+":
                 next_number = current_number + number
 
             # Add game data for the current player's move
@@ -109,13 +132,14 @@ class QLearningModel():
 
     def save(self, filename):
         # Save the Q-table to a binary file using pickle
-        with open(filename, 'wb') as file:
+        with open(filename, "wb") as file:
             pickle.dump(self.q_table, file)
 
     def load(self, filename):
         # Load the Q-table from a binary file using pickle
-        with open(filename, 'rb') as file:
+        with open(filename, "rb") as file:
             self.q_table = pickle.load(file)
+
 
 # Function to handle the human player's turn
 def human_player_turn(current_number):
@@ -131,13 +155,19 @@ def human_player_turn(current_number):
         try:
             number = int(number_input)
             # Check if the chosen operation and number are valid
-            if (operation == "*" and 2 <= number <= 5) or (operation == "+" and 1 <= number <= 5):
+            if (operation == "*" and 2 <= number <= 5) or (
+                operation == "+" and 1 <= number <= 5
+            ):
                 # Check if the result of the chosen operation exceeds the target number
                 if operation == "+" and (current_number + number > target_number):
-                    print(f"{current_number} + {number} = {current_number + number} > {target_number}. Please try again.")
+                    print(
+                        f"{current_number} + {number} = {current_number + number} > {target_number}. Please try again."
+                    )
                     continue
                 elif operation == "*" and (current_number * number > target_number):
-                    print(f"{current_number} * {number} = {current_number * number} > {target_number}. Please try again.")
+                    print(
+                        f"{current_number} * {number} = {current_number * number} > {target_number}. Please try again."
+                    )
                     continue
                 else:
                     valid_input = True
@@ -170,7 +200,10 @@ def play_game():
         operation, number = human_player_turn(current_number)
 
         # If the current state and action are not in the Q-Learning model, add them with an initial value of 0
-        if current_number not in env.q_table or (operation, number) not in env.q_table[current_number]:
+        if (
+            current_number not in env.q_table
+            or (operation, number) not in env.q_table[current_number]
+        ):
             env.q_table[current_number] = {(operation, number): 0}
 
         # Perform the chosen operation and update the current number
@@ -181,7 +214,10 @@ def play_game():
 
         # Print the mathematical operation of the human player's move
         print(f"Your move: {current_number} {operation} {number} = {next_number}")
-        hum_moves[current_number] = [operation, number]  # Add game data for the computer player's move
+        hum_moves[current_number] = [
+            operation,
+            number,
+        ]  # Add game data for the computer player's move
 
         # Check if the human player has reached the target number
         if next_number == target_number:
@@ -206,7 +242,10 @@ def play_game():
 
         # Print the mathematical operation of the computer player's move
         print(f"Computer's move: {current_number} {operation} {number} = {next_number}")
-        comp_moves[current_number] = [operation, number]  # Add game data for the computer player's move
+        comp_moves[current_number] = [
+            operation,
+            number,
+        ]  # Add game data for the computer player's move
 
         # Check if the computer player has reached the target number
         if next_number == target_number:
@@ -224,16 +263,18 @@ def play_game():
 def main():
     # Check if the user wants to load the Q-values from a file
     load = input("Do you want to load the winning strategy file? [yes]: ").lower()
-    if load in ['yes', 'y', '']:
+    if load in ["yes", "y", ""]:
         # Load Q-values if available, or train the model
-        q_values_file = os.path.join(os.path.dirname(__file__), "q_values.pkl")
+        q_values_file = os.path.join(os.path.dirname(__file__), "winning_srat.pkl")
 
         try:
             env.load(q_values_file)
             print("Loaded Q-values from file.")
         except FileNotFoundError:
             print("No existing Q-values found. Training new model...")
-            env.train(num_episodes=1000000)  # Train model with a large number of episodes
+            env.train(
+                num_episodes=1000000
+            )  # Train model with a large number of episodes
             env.save(q_values_file)  # Save the trained Q-values to a file
             print("Q-values saved to file.")
 
@@ -241,9 +282,11 @@ def main():
     else:
         # Check if the user wants to train a new model
         choice = input("Do you want to train a new model? [yes]: ").lower()
-        if choice in ['yes', 'y', '']:
+        if choice in ["yes", "y", ""]:
             print("Training the model...")
-            env.train(num_episodes=1000)  # Train model with a moderate number of episodes
+            env.train(
+                num_episodes=1000
+            )  # Train model with a moderate number of episodes
             print("Finished! Let's play.")
         else:
             print("Loading game with no training! Let's play.")
@@ -253,10 +296,10 @@ def main():
     while True:
         print(f"Current Score - You: {player_score} | Computer: {computer_score}")
         choice = input("Do you want to play again? [yes]: ").lower()
-        if choice in ['yes', 'no', 'y', 'n', '']:
-            if choice in ['yes', 'y', '']:
+        if choice in ["yes", "no", "y", "n", ""]:
+            if choice in ["yes", "y", ""]:
                 play_game()  # Play another game
-            elif load in ['yes', 'y', '']:
+            elif load in ["yes", "y", ""]:
                 env.save(q_values_file)  # Save the Q-values to the file before quitting
                 break
             else:
@@ -266,7 +309,7 @@ def main():
 
 
 # Play the game
-if __name__ == '__main__':
+if __name__ == "__main__":
     target_number = 30
     player_score = 0
     computer_score = 0

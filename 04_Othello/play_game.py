@@ -13,11 +13,12 @@ from othello import Othello
 
 
 class Node:
-    def __init__(self, state, action=None):
-        self.state = state
+    def __init__(self, game, action=None, parent=None):
+        self.game = game
         self.action = action
         self.total_value = 0
         self.visits = 0
+        self.parent = parent
         self.children = []
 
 
@@ -29,15 +30,14 @@ class MonteCarloTreeSearch:
         self.root = None
 
     def search(self, num_iterations):
-        state = np.array(self.game.board).reshape(1, 8, 8, 1)
-        self.root = Node(state)
+        self.root = Node(self.game.copy())
         for _ in range(num_iterations):
             self._simulate()
 
     def _simulate(self):
         node = self._select_node()
-        if node.state.is_game_over():
-            return self._backpropagate(node, node.state.get_winner())
+        if node.game.is_game_over():
+            return self._backpropagate(node, node.game.get_winner())
 
         if not node.children:
             self._expand_node(node)
@@ -56,20 +56,21 @@ class MonteCarloTreeSearch:
         return node
 
     def _expand_node(self, node):
-        legal_moves = node.state.get_legal_moves()
+        legal_moves = node.game.get_legal_moves()
         for move in legal_moves:
-            new_state = node.state.make_move(move)
-            new_node = Node(new_state, move)
+            new_game = node.game.copy()
+            new_game.move = move
+            new_game.make_move()
+            new_node = Node(new_game, move, parent=node)
             node.children.append(new_node)
         return np.random.choice(node.children)
 
     def _simulate_random(self, node):
-        game_copy = self.game.copy()
-        game_copy.set_state(node.state)
+        game_copy = node.game.copy()
         while not game_copy.is_game_over():
             moves = game_copy.get_legal_moves()
-            move = np.random.choice(moves)
-            game_copy.make_move(move)
+            game_copy.move = np.random.choice(moves)
+            game_copy.make_move()
         return game_copy.get_winner()
 
     def _backpropagate(self, node, winner):
@@ -95,6 +96,11 @@ class MonteCarloTreeSearch:
     def get_best_move(self):
         if not self.root:
             raise ValueError("MCTS has not been performed yet.")
+
+        if not self.root.children:
+            legal_moves = self.root.game.get_legal_moves()
+            return np.random.choice(legal_moves) if legal_moves else None
+
         best_child = max(self.root.children, key=lambda node: node.visits)
         return best_child.action
 
@@ -119,7 +125,6 @@ class OthelloAgent:
 
     def train_agent(self, game, mcts_iterations=100, epochs=10, batch_size=32):
         self.create_model()
-        self.model.summary()
 
         for _ in range(mcts_iterations):
             mcts = MonteCarloTreeSearch(game, self)
@@ -130,7 +135,8 @@ class OthelloAgent:
 
             # Perform a game simulation using the selected move
             game_copy = game.copy()
-            game_copy.make_move(best_move)
+            game_copy.move = best_move
+            game_copy.make_move()
 
             # Train the agent with the new game state
             self.model.fit(
@@ -232,7 +238,7 @@ if __name__ == "__main__":
     choice = input("Do you want to load the AI? [yes]: ")
     if choice in ["yes", "y", ""]:
         # Create the neural network model
-        agent_file = os.path.join(os.path.dirname(__file__), "othello_agent.h5")
+        agent_file = os.path.join(os.path.dirname(__file__), "winning_strat.h5")
         OthelloGame().run(agent_file)
     else:
         print("OK! Let's play.")
