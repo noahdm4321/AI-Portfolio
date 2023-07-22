@@ -13,4 +13,4 @@
   - We have now reached the extent of my AI knowledge. I used the keras python library in combination with a Monte Carlo Tree search algorithm to train a deep learning neural network how to play Othello. Probably not the most efficient way to play Othello, but I couldn't just do q-learning again. 
 
 ## Using the scripts
-#### If you want to use any of these scripts for your own purposes, feel free. The purpose of this repository is to showcase my programming skills. Thus, all of the code is written 100% from scratch, except of the Othello game (see [Othello README.md](04_Othello\README.md) for more details).
+#### If you want to use any of these scripts for your own purposes, feel free. The purpose of this repository is to showcase my programming skills. Thus, all of the code is written 100% from scratch, except of the Othello game (see [Othello README.md](04_Othello/README.md) for more details).
