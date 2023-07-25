@@ -6,8 +6,8 @@
 """
 
 import os
-import copy
 import turtle, random
+import numpy as np
 from board import Board
 
 # Define all the possible directions in which a player's move can flip
@@ -69,6 +69,9 @@ class Othello(Board):
             col = initial_squares[i][1]
             self.board[row][col] = color + 1
             self.draw_tile(initial_squares[i], color)
+
+        # Return the initial state after it's initialized
+        return self.get_state()
 
     def make_move(self):
         """Method: make_move
@@ -327,24 +330,25 @@ class Othello(Board):
         return Board.__eq__(self, other) and self.current_player == other.current_player
 
     """
-    Code required for MCTS!
+    Code Required for MCTS and AI algorithm
     """
 
     def get_state(self):
-        return self.board, self.current_player, self.num_tiles
+        # Return the current state of the board as a 2D numpy array.
+        return np.array(self.board)
 
     def is_game_over(self):
+        # Check if the game is over.
         return not self.has_legal_move() or sum(self.num_tiles) == self.n**2
 
     def get_winner(self):
+        # Return the winner if game is over
         if self.is_game_over():
             if self.num_tiles[0] > self.num_tiles[1]:
                 return 1
             elif self.num_tiles[0] < self.num_tiles[1]:
-                return -1
-            else:
                 return 0
-        return None
-
-    def copy(self):
-        return copy.deepcopy(self)
+            else:
+                return None
+        else:
+            return False

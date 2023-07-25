@@ -1,3 +1,4 @@
+import copy
 import os
 import turtle
 import math
@@ -13,8 +14,16 @@ from othello import Othello
 
 
 class Node:
-    def __init__(self, game, action=None, parent=None):
-        self.game = game
+    def __init__(self, state, action=None, parent=None):
+        """
+        Represents a node in the Monte Carlo Tree Search (MCTS) algorithm.
+
+        Parameters:
+            state (np.ndarray): The state of the game (board) represented as a 2D numpy array.
+            action: The action taken to reach this state (i.e., the move played).
+            parent: The parent node in the MCTS tree.
+        """
+        self.state = state
         self.action = action
         self.total_value = 0
         self.visits = 0
@@ -24,30 +33,73 @@ class Node:
 
 class MonteCarloTreeSearch:
     def __init__(self, game, agent, exploration_constant=1.41):
+        """
+        Implements the Monte Carlo Tree Search (MCTS) algorithm to find the best move for the AI agent.
+
+        Parameters:
+            game (Othello): The Othello game instance.
+            agent (OthelloAgent): The AI agent playing the game.
+            exploration_constant (float): The exploration constant used in the UCT formula for node selection.
+        """
         self.game = game
         self.agent = agent
         self.exploration_constant = exploration_constant
         self.root = None
 
     def search(self, num_iterations):
-        self.root = Node(self.game.copy())
+        """
+        Executes the MCTS algorithm by performing simulations and backpropagation.
+
+        Parameters:
+            num_iterations (int): The number of iterations to run the MCTS algorithm.
+        """
+        self.root = Node(self.game.get_state(), parent=None)
         for _ in range(num_iterations):
-            self._simulate()
+            winner = self._simulate()
+            self._backpropagate(self.root, winner)
 
     def _simulate(self):
-        node = self._select_node()
-        if node.game.is_game_over():
-            return self._backpropagate(node, node.game.get_winner())
+        """
+        Conducts a single simulation by traversing the tree, expanding nodes, and performing a random rollout.
 
+        Returns:
+            int: The winner of the simulation: 0 for the AI agent, 1 for the user, or None for a tie.
+        """
+        node = self._select_node()
+        game_copy = copy.deepcopy(self.game)  # Create a copy of the game
+        game_copy.board = node.state.tolist()  # Set the copied state
+        if game_copy.is_game_over():
+            return game_copy.get_winner()
         if not node.children:
             self._expand_node(node)
-            winner = self._simulate_random(node)
-        else:
-            winner = self._simulate()
+        winner = self._simulate_random(node)
+        return winner
 
-        return self._backpropagate(node, winner)
+    def _simulate_random(self, node):
+        """
+        Conducts a random rollout (simulation) from a given node until the game ends.
+
+        Parameters:
+            node (Node): The node to start the rollout from.
+
+        Returns:
+            int: The winner of the simulation: 0 for the AI agent, 1 for the user, or None for a tie.
+        """
+        game_copy = copy.deepcopy(self.game)
+        game_copy.set_state(node.state)
+        while not game_copy.is_game_over():
+            moves = game_copy.get_legal_moves()
+            move = np.random.choice(moves)
+            game_copy.make_move(move)
+        return game_copy.get_winner()
 
     def _select_node(self):
+        """
+        Selects a node for expansion based on the UCT (Upper Confidence Bound for Trees) algorithm.
+
+        Returns:
+            Node: The selected node for expansion.
+        """
         node = self.root
         while node.children:
             if not all(child.visits for child in node.children):
@@ -56,24 +108,26 @@ class MonteCarloTreeSearch:
         return node
 
     def _expand_node(self, node):
-        legal_moves = node.game.get_legal_moves()
-        for move in legal_moves:
-            new_game = node.game.copy()
-            new_game.move = move
-            new_game.make_move()
-            new_node = Node(new_game, move, parent=node)
-            node.children.append(new_node)
-        return np.random.choice(node.children)
+        """
+        Expands a node by adding its child nodes representing legal moves in the game.
 
-    def _simulate_random(self, node):
-        game_copy = node.game.copy()
-        while not game_copy.is_game_over():
-            moves = game_copy.get_legal_moves()
-            game_copy.move = np.random.choice(moves)
-            game_copy.make_move()
-        return game_copy.get_winner()
+        Parameters:
+            node (Node): The node to expand.
+        """
+        legal_moves = self.game.get_legal_moves_for_state(node.state)
+        for move in legal_moves:
+            new_state = self.game.make_move_for_state(move, copy_state=True)
+            new_node = Node(new_state, move, parent=node)
+            node.children.append(new_node)
 
     def _backpropagate(self, node, winner):
+        """
+        Updates the values and visit counts in the MCTS tree nodes during backpropagation.
+
+        Parameters:
+            node (Node): The node to start the backpropagation from.
+            winner: The winner of the simulation: 0 for the AI agent, 1 for the user, or None for a tie.
+        """
         while node is not None:
             node.visits += 1
             if winner is not None:
@@ -81,6 +135,15 @@ class MonteCarloTreeSearch:
             node = node.parent
 
     def _uct_select(self, node):
+        """
+        Selects a child node based on the UCT (Upper Confidence Bound for Trees) formula.
+
+        Parameters:
+            node (Node): The parent node to select a child from.
+
+        Returns:
+            Node: The selected child node.
+        """
         log_total_visits = math.log(node.visits)
         selected_node = None
         best_score = float("-inf")
@@ -94,13 +157,14 @@ class MonteCarloTreeSearch:
         return selected_node
 
     def get_best_move(self):
+        """
+        Gets the best move for the AI agent based on the MCTS simulations.
+
+        Returns:
+            tuple: The coordinates (row, col) of the best move on the game board.
+        """
         if not self.root:
             raise ValueError("MCTS has not been performed yet.")
-
-        if not self.root.children:
-            legal_moves = self.root.game.get_legal_moves()
-            return np.random.choice(legal_moves) if legal_moves else None
-
         best_child = max(self.root.children, key=lambda node: node.visits)
         return best_child.action
 
@@ -110,6 +174,16 @@ class OthelloAgent:
         self.model = None
 
     def create_model(self):
+        """
+        Creates the neural network model for the AI agent using Keras.
+
+        The model architecture includes Convolutional Neural Network (CNN) layers
+        followed by fully connected layers.
+
+        The model is compiled with the Adam optimizer and Mean Squared Error (MSE) loss.
+
+        The model will be stored in the self.model attribute for later use.
+        """
         model = Sequential()
         model.add(
             Conv2D(32, kernel_size=(3, 3), activation="relu", input_shape=(8, 8, 1))
@@ -124,28 +198,51 @@ class OthelloAgent:
         self.model = model
 
     def train_agent(self, game, mcts_iterations=100, epochs=10, batch_size=32):
+        """
+        Trains the agent using the Monte Carlo Tree Search (MCTS) for data collection and neural network training.
+
+        Parameters:
+            game (Othello): The Othello game instance used for training data collection.
+            mcts_iterations (int): The number of MCTS iterations for each training sample.
+            epochs (int): The number of epochs for neural network training.
+            batch_size (int): The batch size for neural network training.
+        """
         self.create_model()
 
+        all_states = []
+        all_moves = []
         for _ in range(mcts_iterations):
             mcts = MonteCarloTreeSearch(game, self)
             mcts.search(mcts_iterations)
 
-            # Get the best move from the MCTS search
-            best_move = mcts.get_best_move()
+            # Accumulate states and corresponding moves from the MCTS search
+            states, moves = self._get_states_and_moves_from_tree(mcts.root)
+            all_states.extend(states)
+            all_moves.extend(moves)
 
-            # Perform a game simulation using the selected move
-            game_copy = game.copy()
-            game_copy.move = best_move
-            game_copy.make_move()
+        # Train the agent on the accumulated states and moves
+        all_states = np.array(all_states).reshape(-1, 8, 8, 1)
+        all_moves = np.array(all_moves)
+        self.model.fit(all_states, all_moves, epochs=epochs, batch_size=batch_size, verbose=1)
 
-            # Train the agent with the new game state
-            self.model.fit(
-                np.array(game_copy.board).reshape(1, 8, 8, 1),
-                np.array([best_move]),
-                epochs=epochs,
-                batch_size=batch_size,
-                verbose=0,
-            )
+    def _get_states_and_moves_from_tree(self, node):
+        """
+        Collects states and corresponding moves from the tree for training the agent.
+
+        Parameters:
+            node (Node): The root node of the Monte Carlo Tree.
+
+        Returns:
+            list: List of states (2D numpy arrays) from the tree.
+            list: List of corresponding moves (actions) from the tree.
+        """
+        states = []
+        moves = []
+        for child in node.children:
+            if child.visits > 0:
+                states.append(child.state)
+                moves.append(child.action)
+        return states, moves
 
     def save_file(self, file_name):
         self.model.save(file_name)
@@ -165,6 +262,15 @@ class OthelloGame:
         self.agent = OthelloAgent()
 
     def run(self, agent_file):
+        """
+        Runs the Othello game with an AI agent.
+
+        Parameters:
+            agent_file (str): The file path to save or load the trained AI agent.
+
+        If the agent_file exists, the AI agent will be loaded from the file.
+        Otherwise, a new AI agent will be trained and saved to the specified file.
+        """
         if os.path.exists(agent_file):
             self.agent.load_file(agent_file)
             print("Loaded model from file.")
@@ -192,6 +298,13 @@ class OthelloGame:
         turtle.mainloop()
 
     def play(self, x, y):
+        """
+        Plays a turn in the Othello game.
+
+        Parameters:
+            x (float): The x-coordinate of the user's click on the game board.
+            y (float): The y-coordinate of the user's click on the game board.
+        """
         # Play the user's turn
         if self.game.has_legal_move():
             self.game.get_coord(x, y)
@@ -205,13 +318,12 @@ class OthelloGame:
         while True:
             self.game.current_player = 1
             if self.game.has_legal_move():
-                self.game.move = self.agent.predict_move(self.game)
-                moves = self.game.get_legal_moves()
-                print(self.game.move)
-                print(moves)
+                mcts = MonteCarloTreeSearch(self.game, self.game.current_player)
+                mcts.search(num_iterations=100)  # Perform MCTS search
+                self.game.move = mcts.get_best_move()
                 self.game.make_move()
                 self.game.current_player = 0
-                if self.game.has_legal_move():
+                if not self.game.has_legal_move() or sum(self.game.num_tiles) == self.game.n**2:
                     break
             else:
                 break
@@ -230,6 +342,7 @@ class OthelloGame:
             print("Thanks for playing Othello!")
             os.system("pause")
             turtle.bye()
+            return self.game.get_winner()
         else:
             turtle.onscreenclick(self.play)
 
