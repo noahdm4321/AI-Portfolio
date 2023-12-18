@@ -3,6 +3,7 @@ os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 from othello import Othello
 from agent import OthelloAgent
 import turtle
+from tmp.agent_visualizer import visualize_agent as visualize
 
 class OthelloGame:
     """
@@ -79,6 +80,7 @@ class OthelloGame:
 
             # Use agent to determine best move
             computer_move = self.agent.determine_next_move(self.game)
+            # visualize(self.agent, self.game, computer_move)  # Uncomment to visuallize q-values for each decision.
 
             # Make the move on the board
             self.game.move = computer_move

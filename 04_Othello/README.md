@@ -1,5 +1,7 @@
 ﻿# Othello
 
+##### While this program is functional, it is not optimized. I am currently working on optimizing the training algorithm to play more effectively. 
+
 ## Goal:
 ##### The goal of the game is to have the majority of your disks showing your color on the board at the end of the game.
 
