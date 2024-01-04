@@ -40,10 +40,6 @@ class OthelloAgent:
             layers.Flatten(input_shape=(8, 8)),
             layers.Dense(512, activation='relu'),
             layers.Dense(1024, activation='relu'),
-            layers.Dense(1536, activation='relu'),
-            layers.Dense(1024, activation='relu'),
-            layers.Dense(512, activation='relu'),
-            layers.Dense(64, activation='relu'),
             layers.Dense(1, activation='linear')
         ])
 

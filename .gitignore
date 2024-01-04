@@ -1,4 +1,6 @@
 /.vs
 /.pytest_cache
 /.vscode
+/04_Othello/alpha-zero
+*tmp
 *__pycache__
