@@ -3,7 +3,7 @@ os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 from othello import Othello
 from agent import OthelloAgent
 import turtle
-from tmp.agent_visualizer import visualize_agent as visualize
+from agent_visualizer import visualize_agent as visualize
 
 class OthelloGame:
     """

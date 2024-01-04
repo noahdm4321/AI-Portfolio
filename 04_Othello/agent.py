@@ -1,6 +1,6 @@
 from copy import deepcopy
 from othello import Othello
-from mcts_UCB1 import MonteCarloTreeSearch
+from mcts import MonteCarloTreeSearch
 import numpy as np
 from tensorflow import keras
 from keras import layers
