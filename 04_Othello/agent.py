@@ -2,9 +2,9 @@ from copy import deepcopy
 from othello import Othello
 from mcts import MonteCarloTreeSearch
 import numpy as np
-from tensorflow import keras
+import keras
 from keras import layers
-from keras.models import load_model
+from keras import models
 
 class OthelloAgent:
     """
@@ -44,7 +44,7 @@ class OthelloAgent:
         ])
 
         # Compile the model with mean squared error loss and Adam optimizer
-        model.compile(optimizer=keras.optimizers.Adam(), loss=keras.losses.mse)
+        model.compile(optimizer=keras.optimizers.Adam(), loss=keras.losses.MeanSquaredError())
         return model
 
     def get_state_representation(self, othello_state):
@@ -125,4 +125,4 @@ class OthelloAgent:
 
     def load_model(self, filepath):
         """Load a saved model."""
-        self.model = load_model(filepath)
+        self.model = models.load_model(filepath)
