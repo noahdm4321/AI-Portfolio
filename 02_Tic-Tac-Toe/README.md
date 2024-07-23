@@ -14,4 +14,4 @@
   - All cells on the grid are filled, resulting in a draw.
 
 ## AI Showcase:
-##### This program involves transition models and rule-based search algorithms. 
+##### This program involves state transitions and a rule-based search algorithms. 

@@ -15,6 +15,6 @@
 7. When the game ends, the player with the most disks of their color on the board wins.
 
 ## AI Showcase:
-##### This program involves Monte Carlo Tree Search Algorithm, Knowledge-Based Agents, and TensorFlow Neural Networks (keras). 
+##### This program involves Monte Carlo tree search algorithm, propagation trees, and TensorFlow deep learning neural networks (using Keras). 
 
 ###### The program for the Othello game is adapted from <https://github.com/SiyanH/othello-game> which uses random selection to determine the computer's move. The deep learning algorithm was programmed by me. 

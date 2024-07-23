@@ -1,8 +1,5 @@
 # Import necessary libraries
-import pickle
 import random
-import os
-
 
 # Define Q-Learning method for AI
 class QLearningModel:
@@ -14,9 +11,9 @@ class QLearningModel:
             (op, num) for op in self.operations for num in self.num_range
         ]  # All possible actions (operation, number) pairs
         self.q_table = {}  # Q-table to store state-action values
-        self.alpha = 0.1  # Learning rate for Q-learning algorithm
+        self.alpha = 0.2  # Learning rate for Q-learning algorithm
         self.gamma = 0.8  # Discount factor for future rewards
-        self.epsilon = 0.1  # Exploration rate for choosing random actions vs. exploiting learned values
+        self.epsilon = 0.5  # Exploration rate for choosing random actions vs. exploiting learned values
 
     def get_action(self, current_number):
         # Get list of valid moves for the given current number
@@ -130,15 +127,9 @@ class QLearningModel:
         for _ in range(num_episodes):
             self.q_learning()
 
-    def save(self, filename):
-        # Save the Q-table to a binary file using pickle
-        with open(filename, "wb") as file:
-            pickle.dump(self.q_table, file)
-
-    def load(self, filename):
-        # Load the Q-table from a binary file using pickle
-        with open(filename, "rb") as file:
-            self.q_table = pickle.load(file)
+    def difficult(self, diff):
+        # Change randomization for difficulty
+        self.epsilon = diff
 
 
 # Function to handle the human player's turn
@@ -193,6 +184,7 @@ def play_game():
     current_number = 1  # Start with 1
     comp_moves = {}
     hum_moves = {}
+    cheat = 0 # Allows the computer to cheat on impossible mode
 
     # Continue the game until the target number is reached
     while current_number != target_number:
@@ -213,6 +205,9 @@ def play_game():
             next_number = current_number + number
 
         # Print the mathematical operation of the human player's move
+        if env.epsilon == 0 and next_number == target_number:
+            next_number -= 1
+            cheat = 1 # I cheated
         print(f"Your move: {current_number} {operation} {number} = {next_number}")
         hum_moves[current_number] = [
             operation,
@@ -225,7 +220,7 @@ def play_game():
             player_score += 1
             # Update the Q-Learning model using the game data (human wins with a reward of 10)
             env.update_q_values(hum_moves, 10)
-            env.update_q_values(comp_moves, 0)
+            env.update_q_values(comp_moves, -5)
             break
 
         # Update the state for the next turn
@@ -251,9 +246,15 @@ def play_game():
         if next_number == target_number:
             print("\nThe computer won the game!")
             computer_score += 1
-            # Update the Q-Learning model using the game data (computer wins with a reward of 10)
-            env.update_q_values(hum_moves, 0)
-            env.update_q_values(comp_moves, 10)
+            if cheat == 1:
+                # I cheated and I will learn from my mistakes
+                env.update_q_values(hum_moves, 10)
+                comp_moves.popitem()
+                env.update_q_values(comp_moves, -5)
+            else:
+                # Update the Q-Learning model using the game data (computer wins with a reward of 5)
+                env.update_q_values(hum_moves, 0)
+                env.update_q_values(comp_moves, 5)
             break
 
         # Update the state for the next turn
@@ -261,35 +262,54 @@ def play_game():
 
 
 def main():
-    # Check if the user wants to load the Q-values from a file
-    load = input("Do you want to load the winning strategy file? [yes]: ").lower()
-    if load in ["yes", "y", ""]:
-        # Load Q-values if available, or train the model
-        q_values_file = os.path.join(os.path.dirname(__file__), "winning_srat.pkl")
-
+    i=0 # Error looping variable
+    global target_number
+    # Check if the user wants to change the target number
+    while i==0:
+        num = input("Pick a target number? [default=30]: ")
+        if num == "":
+            num = 30
         try:
-            env.load(q_values_file)
-            print("Loaded Q-values from file.")
-        except FileNotFoundError:
-            print("No existing Q-values found. Training new model...")
-            env.train(
-                num_episodes=1000000
-            )  # Train model with a large number of episodes
-            env.save(q_values_file)  # Save the trained Q-values to a file
-            print("Q-values saved to file.")
+            if int(num) > 1 and int(num) <= 100:
+                target_number = int(num)
+                i=1
+            else:
+                print("\nPlease pick a number between 1 and 100.")
+        except ValueError:
+            print("\nInvalid choice. Please enter a number.")
 
-        print("Finished! Let's play.")
-    else:
-        # Check if the user wants to train a new model
-        choice = input("Do you want to train a new model? [yes]: ").lower()
-        if choice in ["yes", "y", ""]:
+    i=0
+    # Check if the user's desired level of difficulty
+    while i==0:
+        diff = input("What difficulty would you like to play at? [easy, medium, hard, impossible]: ").lower()
+        if diff in ["e", "easy"]:
+            print("Loading game with no training! Let's play.")
+            i=1
+        elif diff in ["m", "medium"]:
             print("Training the model...")
             env.train(
-                num_episodes=1000
-            )  # Train model with a moderate number of episodes
+                num_episodes=2000
+            )  # Train model with a small number of episodes
             print("Finished! Let's play.")
+            i=1
+        elif diff in ["h", "hard"]:
+            print("Training the model...")
+            env.train(
+                num_episodes=100000
+            )  # Train model with a large number of episodes
+            env.difficult(0.3) # Less random moves
+            print("Finished! Let's play.")
+            i=1
+        elif diff in ["i", "impossible"]:
+            print("Training the model...")
+            env.train(
+                num_episodes=200000
+            )  # Train model with a larger number of episodes
+            env.difficult(0) # No random moves
+            print("Finished! Prepare to lose.")
+            i=1
         else:
-            print("Loading game with no training! Let's play.")
+            print("\nInvalid choice. Please try again.")
     play_game()
 
     # After the first game, ask the user if they want to play again or quit
@@ -299,9 +319,6 @@ def main():
         if choice in ["yes", "no", "y", "n", ""]:
             if choice in ["yes", "y", ""]:
                 play_game()  # Play another game
-            elif load in ["yes", "y", ""]:
-                env.save(q_values_file)  # Save the Q-values to the file before quitting
-                break
             else:
                 break
         else:

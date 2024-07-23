@@ -1,10 +1,10 @@
 # Rock Paper Scissors
 
 ## Goal:
-##### The goal of the game is to beat your opponant.
+##### The goal of the game is to beat your opponent.
 
 ## Rules:
-1. Each player independantly picks a weapon: `rock`, `paper`, or `scissors`.
+1. Each player independently picks a weapon: `rock`, `paper`, or `scissors`.
 2. The weapons represent the following outcomes:
   - Rock beats scissors (rock crushes scissors).
   - Scissors beats paper (scissors cut paper).
