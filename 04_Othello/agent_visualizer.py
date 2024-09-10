@@ -1,4 +1,3 @@
-from copy import deepcopy
 import os
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2' 
 import numpy as np
@@ -6,30 +5,32 @@ import matplotlib.pyplot as plt
 from othello import Othello
 from agent import OthelloAgent
 
-def visualize_agent(agent, game_state, action=None, state_size=8):
+def visualize_agent(agent, game_state, action, state_size=8):
     # Create an empty grid for the heatmap
     q_values_grid = np.zeros((state_size, state_size))
     legal_actions = game_state.get_legal_moves()
 
     # Iterate through all possible positions on the board
+    state_representation = agent.get_state_representation(game_state)
+
+    # Predict Q-values using the agent's model
+    q_values = agent.model.predict(np.array([state_representation]), verbose=0)[0]
+
+    # Store the Q-value for the selected action (assuming there's only one action)
+    q_values_grid = q_values.reshape(8, 8)
     for i in range(state_size):
         for j in range(state_size):
-            othello_state = deepcopy(game_state) # Create copy of game
-            othello_state.board[i][j] = 1  # Assume the current player is 1 for visualization
-            state_representation = agent.get_state_representation(othello_state)
-
-            # Predict Q-values using the agent's model
-            q_values = agent.model.predict(np.array([state_representation]), verbose=0)[0]
-
-            # Store the Q-value for the selected action (assuming there's only one action)
-            q_values_grid[i][j] = q_values[0]
-            if (i,j) in legal_actions:
-                if (i,j) == action:
-                    plt.gca().add_patch(plt.Rectangle((j - 0.5, i - 0.5), 1, 1, color='red', fill=False))
-                else:
-                    plt.gca().add_patch(plt.Rectangle((j - 0.5, i - 0.5), 1, 1, color='black', fill=False))
-            elif game_state.board[i][j] > 0:
+            if game_state.board[i][j] > 0:
                 plt.gca().add_patch(plt.Circle((j, i), 0.4, color='grey', fill=True))
+                plt.gca().add_patch(plt.Rectangle((j - 0.5, i - 0.5), 1, 1, color='black', fill=False, lw=0))
+            elif (i,j) == action:
+                plt.gca().add_patch(plt.Rectangle((j - 0.5, i - 0.5), 1, 1, color='red', fill=False, lw=2))
+                plt.text(j, i, legal_actions.index((i,j))+1, ha='center', va='center')
+            elif (i,j) in legal_actions:
+                plt.gca().add_patch(plt.Rectangle((j - 0.5, i - 0.5), 1, 1, color='black', fill=False, lw=2))
+                plt.text(j, i, legal_actions.index((i,j))+1, ha='center', va='center')
+            else:
+                plt.gca().add_patch(plt.Rectangle((j - 0.5, i - 0.5), 1, 1, color='black', fill=False, lw=0))
 
     # Plot the heatmap
     plt.imshow(q_values_grid, cmap='viridis', interpolation='nearest')

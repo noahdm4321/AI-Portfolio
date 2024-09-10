@@ -1,10 +1,13 @@
-from copy import deepcopy
 from othello import Othello
 from mcts import MonteCarloTreeSearch
 import numpy as np
 import keras
 from keras import layers
 from keras import models
+
+MOVE_DIRS = [(-1, -1), (-1, 0), (-1, +1),
+             (0, -1),           (0, +1),
+             (+1, -1), (+1, 0), (+1, +1)]
 
 class OthelloAgent:
     """
@@ -37,19 +40,35 @@ class OthelloAgent:
         """Create the neural network model for the AI agent using Keras."""
         # Define a simple feedforward neural network using Keras
         model = keras.Sequential([
-            layers.Flatten(input_shape=(8, 8)),
+            keras.Input(shape=(8,8,3)), # Input shape: 8x8 board with 3 channels
+            # Convolutional layers to extract features
+            layers.Conv2D(32, (3, 3), padding='same'),
+            layers.BatchNormalization(axis=-1),
+            layers.Activation('relu'),
+            layers.Conv2D(64, (3, 3), padding='same'),
+            layers.BatchNormalization(axis=-1),
+            layers.Activation('relu'),
+            layers.Conv2D(128, (3, 3), padding='same'),
+            layers.BatchNormalization(axis=-1),
+            layers.Activation('relu'),
+            # Flatten the output to feed into dense layers
+            layers.Flatten(),
             layers.Dense(512, activation='relu'),
-            layers.Dense(1024, activation='relu'),
-            layers.Dense(1, activation='linear')
+            layers.Dense(64, activation='softmax')  # Output probability field over board
         ])
 
-        # Compile the model with mean squared error loss and Adam optimizer
-        model.compile(optimizer=keras.optimizers.Adam(), loss=keras.losses.MeanSquaredError())
+        # Compile the model with mean squared error loss and SGD optimizer
+        model.compile(optimizer=keras.optimizers.SGD(learning_rate=0.01, momentum=0.9), loss=keras.losses.MeanSquaredError(), metrics=[keras.metrics.MeanSquaredError()])
         return model
 
     def get_state_representation(self, othello_state):
         """Convert Othello state to a format suitable for input to the neural network"""
-        return np.array(othello_state.board).reshape((8, 8, 1))
+        board = np.array(othello_state.board).reshape((8, 8))
+        state_array = np.zeros((8, 8, 3), dtype=np.int8)
+        state_array[board == 1, 0] = 1
+        state_array[board == -1, 1] = 1
+        state_array[board == 0, 2] = 1
+        return state_array
 
     def train_agent(self, num_episodes=1000):
         """Train the agent using the Monte Carlo Tree Search (MCTS)."""
@@ -64,60 +83,97 @@ class OthelloAgent:
             othello.board[3][4] = 1
             othello.board[4][3] = 1
             othello.board[4][4] = 2
-            states, actions, rewards = [], [], []
+            states = []
 
             while othello.has_legal_move() and sum(othello.num_tiles) != othello.n ** 2:
                 # Use MCTS to select an action
                 state_representation = self.get_state_representation(othello)
                 selected_action = self.mcts.search(othello, self.num_simulations)
 
-                # Play the selected action
+                # Play the selected action (modified functions from othello.py)
                 if othello.is_legal_move(selected_action):
+                    # make_move
                     othello.board[selected_action[0]][selected_action[1]] = othello.current_player + 1
                     othello.num_tiles[othello.current_player] += 1
+                    # flip_tiles
+                    curr_tile = othello.current_player + 1 
+                    for direction in MOVE_DIRS:
+                        # has_tile_to_flip
+                        i = 1
+                        if othello.current_player in (0, 1) and \
+                        othello.is_valid_coord(selected_action[0], selected_action[1]):
+                            curr_tile = othello.current_player + 1
+                            while True:
+                                row = selected_action[0] + direction[0] * i
+                                col = selected_action[1] + direction[1] * i
+                                if not othello.is_valid_coord(row, col) or \
+                                    othello.board[row][col] == 0:
+                                    return False
+                                elif othello.board[row][col] == curr_tile:
+                                    break
+                                else:
+                                    i += 1
+                        # flip_tiles
+                        if i > 1:
+                            i = 1
+                            while True:
+                                row = selected_action[0] + direction[0] * i
+                                col = selected_action[1] + direction[1] * i
+                                if othello.board[row][col] == curr_tile:
+                                    break
+                                else:
+                                    othello.board[row][col] = curr_tile
+                                    othello.num_tiles[othello.current_player] += 1
+                                    othello.num_tiles[(othello.current_player + 1) % 2] -= 1
+                                    i += 1
 
-                # Calculate reward based on winner
-                if not othello.has_legal_move() or sum(othello.num_tiles) == othello.n ** 2:
-                    # Reward for most tiles
-                    player_tiles = sum(row.count(1) for row in othello.board)
-                    opponent_tiles = sum(row.count(2) for row in othello.board)
-                    # Considering adding additional rewards for corner tiles
-                    reward = player_tiles - opponent_tiles
-                reward=0
+                    if othello.current_player == 0:
+                        othello.current_player += 1
+                    else:
+                        othello.current_player += -1
 
-                # Store the current state, action, and immediate reward
+                # Store the current state, and immediate reward
                 states.append(state_representation)
-                actions.append(selected_action)
-                rewards.append(reward)
+
+            # Determine the winner
+            player_tiles = sum(row.count(2) for row in othello.board)
+            opponent_tiles = sum(row.count(1) for row in othello.board)
+            if player_tiles > opponent_tiles:
+                reward = player_tiles
+            elif player_tiles < opponent_tiles:
+                reward = 0-player_tiles
+            else:
+                reward = 0
+            num_state = len(states)
+            rewards = [reward]*num_state
 
             # Convert lists to numpy arrays
             states = np.array(states)
-            actions = np.array(actions)
             rewards = np.array(rewards)
 
-            # Train the neural network using states as input, actions as targets, and rewards as rewards
-            self.model.fit(states, actions, sample_weight=rewards, epochs=1, verbose=0)
+            # Train the neural network using states as input, rewards as targets
+            self.model.fit(states, rewards, batch_size=num_state, epochs=1, verbose=0)
 
     def determine_next_move(self, othello_state):
         """Determine the next best move for the agent based on model."""
         # Given the current Othello state, use the trained model to predict the best move
         legal_actions = othello_state.get_legal_moves()
+
+        # Initialize the variables
         q_values = []
-        for i in legal_actions:
-            game_state = deepcopy(othello_state) # Create copy of game
-            game_state.board[i[0]][i[1]] = 1  # Assume the current player is 1 for visualization
-            state_representation = self.get_state_representation(game_state)
-            q_values.append(self.model.predict(np.array([state_representation]), verbose=0)[0])
-        
-        # Find the index of the action with the highest Q-value
-        best_action_index = np.argmax(q_values)
-        # print(f'{["{:.4f}".format(float(value)) for value in q_values]} - {best_action_index}')
 
-        # Get legal actions and select the best action
-        best_action = legal_actions[best_action_index]
-        # print(f'{legal_actions} - {best_action}')
+        # Iterate through legal_actions
+        state_representation = self.get_state_representation(othello_state)
+        q_value = self.model.predict(np.array([state_representation]), verbose=0)[0]
+        for move in legal_actions:
+            q_values.append(q_value.reshape(8, 8)[move[0]][move[1]])
 
-        return best_action
+        q_values = np.array(q_values)
+        print(q_values)
+        best_move = legal_actions[np.argmax(q_values)]
+        print(best_move)
+
+        return best_move
 
     def save_model(self, filepath):
         """Save the model."""

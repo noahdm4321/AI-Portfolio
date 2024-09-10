@@ -80,7 +80,7 @@ class OthelloGame:
 
             # Use agent to determine best move
             computer_move = self.agent.determine_next_move(self.game)
-            # visualize(self.agent, self.game, computer_move)  # Uncomment to visuallize q-values for each decision.
+            visualize(self.agent, self.game, computer_move)  # Uncomment to visuallize q-values for each decision.
 
             # Make the move on the board
             self.game.move = computer_move
