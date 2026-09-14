@@ -7,7 +7,7 @@
 2. [Tic Tac Toe](02_Tic-Tac-Toe)
   - The program now increases in complexity by using a rule-based search algorithm to determine the best move.
 3. [Operation Relay](03_Operation-Relay)
-  - This is an original game designed by myself in order to prove that I am the one programing these AIs. 
+  - This is an original game designed by myself in order to prove that I am the one programming these AIs. 
   - The program now becomes a traditional AI, by using a q-learning algorithm combined with guided reinforcement learning to improve the AI's strategy.
 4. [Othello](04_Othello)
   - We have now reached the extent of my AI knowledge. I used the keras python library in combination with a Monte Carlo Tree search algorithm to train a deep learning neural network how to play Othello. Probably not the most efficient way to play Othello, but I couldn't just do q-learning again. 
