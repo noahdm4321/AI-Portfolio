@@ -31,7 +31,7 @@ class OthelloGame:
             Does: If agent model is saved, load it. Otherwise, train new model and save it. Then draws the board and start the game, sets the user to be the first player, and then alternate back and forth between the user and the computer until the game is over.
         '''
         # Check if a saved model exists
-        filepath = os.path.dirname(os.path.realpath(__file__)) + '\\agent_model.keras'
+        filepath = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'agent_model.keras')
         try:
             self.agent.load_model(filepath)
             print("Loaded existing model.")

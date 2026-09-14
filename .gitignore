@@ -4,3 +4,4 @@
 /04_Othello/alpha-zero
 *tmp
 *__pycache__
+.venv
