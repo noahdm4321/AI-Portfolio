@@ -1,0 +1,8 @@
+# Must use python version >=3.11, <3.13 for tensorflow
+# venv is python 3.12
+# run `pip install -r requirements.txt`
+
+numpy>=2.0.0,<3.0.0
+keras>=3.0.0,<4.0.0
+tensorflow>=2.0.0,<3.0.0
+matplotlib>=3.0.0,<4.0.0
