@@ -1,0 +1,27 @@
+/*===- TableGen'erated file -------------------------------------*- C++ -*-===*\
+|*                                                                            *|
+|* Dialect Definitions                                                        *|
+|*                                                                            *|
+|* Automatically generated file, do not edit!                                 *|
+|* From: TritonNvidiaGPUDialect.td                                            *|
+|*                                                                            *|
+\*===----------------------------------------------------------------------===*/
+
+MLIR_DEFINE_EXPLICIT_TYPE_ID(::mlir::triton::nvidia_gpu::TritonNvidiaGPUDialect)
+namespace mlir::triton::nvidia_gpu {
+
+
+TritonNvidiaGPUDialect::TritonNvidiaGPUDialect(::mlir::MLIRContext *context)
+    : ::mlir::Dialect(getDialectNamespace(), context, ::mlir::TypeID::get<TritonNvidiaGPUDialect>())
+    
+     {
+  getContext()->loadDialect<triton::TritonDialect>();
+  getContext()->loadDialect<triton::gpu::TritonGPUDialect>();
+  getContext()->loadDialect<mlir::gpu::GPUDialect>();
+  initialize();
+}
+
+TritonNvidiaGPUDialect::~TritonNvidiaGPUDialect() = default;
+
+
+} // namespace mlir::triton::nvidia_gpu
