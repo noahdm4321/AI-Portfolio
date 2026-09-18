@@ -24,34 +24,49 @@ class OthelloGame:
         self.user_score = 0
         self.computer_score = 0
 
-    def run(self):
+    def run(self, train=False, draw=False, difficulty="easy"):
         ''' Method: run
-            Parameters: self
-            Returns: nothing
-            Does: If agent model is saved, load it. Otherwise, train new model and save it. Then draws the board and start the game, sets the user to be the first player, and then alternate back and forth between the user and the computer until the game is over.
+            Parameters: self, train, draw
+        Returns: nothing
+            Does: Load existing agent model. If new model requested, train new model and save it. Then draws the board and start the game, sets the user to be the first player, and then alternate back and forth between the user and the computer until the game is over.
         '''
-        # Check if a saved model exists
-        filepath = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'agent_model.keras')
-        try:
-            self.agent.load_model(filepath)
-            print("Loaded existing model.")
-        except (ValueError):
-            print("No existing model found. Training a new model...")
-            # Train the agent
-            self.agent.train_agent()
-            # Save the trained model
-            self.agent.save_model(filepath)
-            print("New model trained and saved.")
-        print("Finished! Let's play.")
+        if difficulty == "easy":
+            self.agent.random_mode = True
+            print("Easy mode: using random selection.")
+        elif difficulty == "medium":
+            filepath = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'agent_model_1000.keras')
+            try:
+                self.agent.load_model(filepath)
+                print("Loaded existing model.")
+                if train:
+                    self.agent.train_agent(draw=draw)
+                    print("New medium model trained.")
+                print("Finished! Let's play.")
+            except (ValueError):
+                print("No existing model found!")
+                self.agent.train_agent(num_episodes=1000)
+                self.agent.save_model(filepath)
+                print("New medium model trained and saved.")
+                print("Finished! Let's play.")
+        elif difficulty == "hard":
+            filepath = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'agent_model_10000.keras')
+            try:
+                self.agent.load_model(filepath)
+                print("Loaded existing model.")
+                if train:
+                    self.agent.train_agent(draw=draw)
+                    print("New hard model trained.")
+                print("Finished! Let's play.")
+            except (ValueError):
+                print("No existing model found!")
+                self.agent.train_agent(num_episodes=10000)
+                self.agent.save_model(filepath)
+                print("New hard model trained and saved.")
+                print("Finished! Let's play.")
 
-        # Create Othello board with turtle
         print("Draw Board")
         self.game.draw_board()
         self.game.initialize_board()
-
-        if self.game.current_player not in (0, 1):
-            print("Error: unknown player. Quit...")
-            return
 
         self.game.current_player = 0
         print('Your turn.')
@@ -80,7 +95,9 @@ class OthelloGame:
 
             # Use agent to determine best move
             computer_move = self.agent.determine_next_move(self.game)
-            # visualize(self.agent, self.game, computer_move)  # Uncomment to visualize q-values for each decision.
+            if computer_move is None:
+                break
+            visualize(self.agent, self.game, computer_move)  # Uncomment to visualize q-values for each decision.
 
             # Make the move on the board
             self.game.move = computer_move
@@ -133,15 +150,25 @@ class OthelloGame:
             turtle.bye()
 
 if __name__ == "__main__":
-    choice = input("Do you want to load the AI? [yes]: ")
-    if choice in ["yes", "y", ""]:
-        game = OthelloGame()
-        game.run()
+    choice = input("Please select a difficulty level (easy, medium, hard) [hard]: ").lower()
+    if choice in ["easy", "e"]:
+        difficulty = "easy"
+    elif choice in ["medium", "m"]:
+        difficulty = "medium"
     else:
-        print("OK! Let's play.")
-        # Create Othello board with turtle
-        game = Othello()
-        game.draw_board()
-        game.initialize_board()
-        # Run game file without ai agent
-        game.run()
+        difficulty = "hard"
+
+    if difficulty == "easy":
+        print("Easy mode: using random selection. Let's play.")
+        game = OthelloGame()
+        game.run(difficulty="easy")
+    else:
+        choice = input("Do you want to train a new AI? [yes]: ").lower()
+        if choice in ["yes", "y", ""]:
+            draw_choice = input("Draw board during training? [no]: ").lower()
+            draw = draw_choice in ["yes", "y"]
+            game = OthelloGame()
+            game.run(train=True, difficulty=difficulty, draw=draw)
+        else:
+            game = OthelloGame()
+            game.run(difficulty=difficulty)

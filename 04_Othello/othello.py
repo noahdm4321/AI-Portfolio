@@ -66,31 +66,34 @@ class Othello(Board):
             self.board[row][col] = color + 1
             self.draw_tile(initial_squares[i], color)
     
-    def make_move(self):
+    def make_move(self, draw=True):
         ''' Method: make_move
-            Parameters: self, move
+            Parameters: self, draw (boolean, optional)
             Returns: nothing
             Does: Draws a tile for the player's next legal move on the 
                   board and flips the adversary's tiles. Also, updates the 
-                  state of the board (1 for black tiles and 2 for white 
+                  state of the board (1 for black tiles and 2 for white
                   tiles), and increases the number of tiles of the current 
                   player by 1.
+                  When draw is False, turtle graphics are skipped (used by MCTS).
         '''
         if self.is_legal_move(self.move):
             self.board[self.move[0]][self.move[1]] = self.current_player + 1
             self.num_tiles[self.current_player] += 1
-            self.draw_tile(self.move, self.current_player)
-            self.flip_tiles()
+            if draw:
+                self.draw_tile(self.move, self.current_player)
+            self.flip_tiles(draw)
     
-    def flip_tiles(self):
+    def flip_tiles(self, draw=True):
         ''' Method: flip_tiles
-            Parameters: self
+            Parameters: self, draw (boolean, optional)
             Returns: nothing
-            Does: Flips the adversary's tiles for current move. Also, 
-                  updates the state of the board (1 for black tiles and 
-                  2 for white tiles), increases the number of tiles of 
-                  the current player by 1, and decreases the number of 
+            Does: Flips the adversary's tiles for current move. Also,
+                  updates the state of the board (1 for black tiles and
+                  2 for white tiles), increases the number of tiles of
+                  the current player by 1, and decreases the number of
                   tiles of the adversary by 1.
+                  When draw is False, turtle graphics are skipped (used by MCTS).
         '''
         curr_tile = self.current_player + 1 
         for direction in MOVE_DIRS:
@@ -105,7 +108,8 @@ class Othello(Board):
                         self.board[row][col] = curr_tile
                         self.num_tiles[self.current_player] += 1
                         self.num_tiles[(self.current_player + 1) % 2] -= 1
-                        self.draw_tile((row, col), self.current_player)
+                        if draw:
+                            self.draw_tile((row, col), self.current_player)
                         i += 1
 
     def has_tile_to_flip(self, move, direction):

@@ -1,5 +1,6 @@
 import random
 import numpy as np
+from copy import deepcopy
 from othello import Othello
 
 class MonteCarloTreeSearch:
@@ -9,6 +10,7 @@ class MonteCarloTreeSearch:
     Attributes:
     - exploration_constant (float): Controls the balance between exploration and exploitation in the tree.
     - root_node (Node): Represents the root of the Monte Carlo tree, starting from the current game state.
+    - agent (OthelloAgent or None): Optional agent whose neural network guides the simulation (rollout) phase via determine_next_move(). When None, simulations use uniform random selection.
 
     Methods:
     - search(root_state, num_simulations): Performs Monte Carlo Tree Search to find the best action.
@@ -18,9 +20,10 @@ class MonteCarloTreeSearch:
     - backpropagation(node, result): Backpropagates the result of a simulation up the tree.
     - best_child(node): Selects the best child based on the UCB1 formula.
     """
-    def __init__(self, exploration_constant):
-        # Initialize the Monte Carlo Tree Search with an exploration constant.
+    def __init__(self, exploration_constant, agent=None):
+        # Initialize the Monte Carlo Tree Search with an exploration constant
         self.exploration_constant = exploration_constant
+        self.agent = agent
 
     def search(self, root_state: Othello, num_simulations):
         """Perform Monte Carlo Tree Search to find the best action."""
@@ -38,7 +41,10 @@ class MonteCarloTreeSearch:
     def selection(self, node):
         """Select the best child node until a terminal or unexpanded node is reached."""
         while not node.is_terminal() and node.is_fully_expanded():
-            node = self.best_child(node)
+            child = self.best_child(node)
+            if child is None:
+                break
+            node = child
         return node
 
     def expansion(self, node):
@@ -46,15 +52,16 @@ class MonteCarloTreeSearch:
         legal_actions = node.get_untried_actions()
         if legal_actions:
             action = random.choice(legal_actions)
-            new_state = node.get_state()
+            new_state = deepcopy(node.get_state())
 
-            # Play the selected action
+            # Play the selected action (includes tile flipping via make_move).
+            # Set self.move so make_move / flip_tiles can access it.
+            new_state.move = action
             if new_state.is_legal_move(action):
-                new_state.board[action[0]][action[1]] = new_state.current_player + 1
-                new_state.num_tiles[new_state.current_player] += 1
+                new_state.make_move(draw=False)
 
-            # Change player
-            new_state.current_player = 1 if node.state.current_player == 0 else 0
+            # Change player (make_move does NOT switch players)
+            new_state.current_player = 1 - new_state.current_player
             new_node = Node(new_state, parent=node, action=action)
             node.add_child(new_node)
             return new_node
@@ -62,30 +69,42 @@ class MonteCarloTreeSearch:
             return node
 
     def simulation(self, node):
-        """Simulate a game from the given node until a terminal state is reached."""
-        state = node.get_state()
-        while not state.has_legal_move() or sum(state.num_tiles) == state.n ** 2:
+        """Simulate a game from the given node until a terminal state is reached.
+
+        When an agent is configured (self.agent is not None), each rollout step
+        uses the agent's trained neural network via determine_next_move() to
+        select actions instead of uniform random selection.
+        """
+        state = deepcopy(node.get_state())
+
+        while sum(state.num_tiles) < state.n ** 2:
             legal_actions = state.get_legal_moves()
             if legal_actions:
-                action = random.choice(legal_actions)
+                if self.agent is not None:
+                    action = self.agent.determine_next_move(state)
+                else:
+                    action = random.choice(legal_actions)
 
-                # Play the selected action
+                # Play the selected action (includes tile flipping via make_move).
+                state.move = action
                 if state.is_legal_move(action):
-                    state.board[action[0]][action[1]] = state.current_player + 1
-                    state.num_tiles[state.current_player] += 1
+                    state.make_move(draw=False)
 
                 # Change player
-                state.current_player = 1 if state.current_player == 0 else 0
+                state.current_player = 1 - state.current_player
             else:
-                break
+                # Current player cannot move — pass to opponent.
+                # In Othello, the game continues with the opponent's turn.
+                state.current_player = 1 - state.current_player
+                # If the opponent also cannot move, the game is over.
+                if not state.has_legal_move():
+                    break
 
-        # Calculate reward based on winner
-        if not state.has_legal_move() or sum(state.num_tiles) == state.n ** 2:
-            player_tiles = sum(row.count(1) for row in state.board)
-            opponent_tiles = sum(row.count(2) for row in state.board)
-            # Possibly want to add rewards for getting corner and edge tiles
-            reward = player_tiles - opponent_tiles
-        reward=0
+        # Calculate reward based on final tile count difference
+        player_tiles = sum(row.count(1) for row in state.board)
+        opponent_tiles = sum(row.count(2) for row in state.board)
+        # Possibly want to add rewards for getting corner and edge tiles
+        reward = player_tiles - opponent_tiles
 
         return reward
 
@@ -135,8 +154,26 @@ class Node:
         self.value = 0
 
     def is_terminal(self):
-        """Check if the node represents a terminal state."""
-        return not self.state.get_legal_moves() or sum(self.state.num_tiles) == self.state.n ** 2
+        """Check if the node represents a terminal state in Othello.
+        
+        In Othello, the game is over when the board is full OR when neither
+        player can make a legal move (a player with no moves must 'pass' and
+        the opponent gets a turn; only when both pass consecutively is the
+        game truly over).
+        """
+        # Board is completely filled
+        if sum(self.state.num_tiles) == self.state.n ** 2:
+            return True
+        # Current player has no legal move
+        if not self.state.get_legal_moves():
+            # In Othello, the other player gets a turn (pass).
+            # The game is only over if BOTH players cannot move.
+            original_player = self.state.current_player
+            self.state.current_player = 1 - original_player
+            opponent_has_move = self.state.has_legal_move()
+            self.state.current_player = original_player  # restore
+            return not opponent_has_move
+        return False
 
     def is_fully_expanded(self):
         """Check if all possible actions from this node have been tried."""
