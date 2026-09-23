@@ -97,7 +97,7 @@ class OthelloGame:
             computer_move = self.agent.determine_next_move(self.game)
             if computer_move is None:
                 break
-            visualize(self.agent, self.game, computer_move)  # Uncomment to visualize q-values for each decision.
+            # visualize(self.agent, self.game, computer_move)  # Uncomment to visualize decision values for each move.
 
             # Make the move on the board
             self.game.move = computer_move

@@ -1,40 +1,82 @@
-from copy import deepcopy
 import os
-os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2' 
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 import numpy as np
 import matplotlib.pyplot as plt
 from othello import Othello
 from agent import OthelloAgent
 
 def visualize_agent(agent, game_state, action=None, state_size=8):
-    # Create an empty grid for the heatmap
-    q_values_grid = np.zeros((state_size, state_size))
+    state_size = getattr(game_state, "n", state_size)
     legal_actions = game_state.get_legal_moves()
+    move_values, value_source = agent.get_move_values(game_state)
+    values_grid = np.full((state_size, state_size), np.nan, dtype=np.float32)
 
-    # Iterate through all possible positions on the board
-    for i in range(state_size):
-        for j in range(state_size):
-            othello_state = deepcopy(game_state) # Create copy of game
-            othello_state.board[i][j] = 1  # Assume the current player is 1 for visualization
-            state_representation = agent.get_state_representation(othello_state)
+    for move, value in move_values.items():
+        if move in legal_actions and np.isfinite(value):
+            values_grid[move[0], move[1]] = value
 
-            # Predict Q-values using the agent's model
-            q_values = agent.model.predict(np.array([state_representation]), verbose=0)[0]
+    if action is None and value_source != "random" and move_values:
+        action = max(move_values, key=move_values.get)
 
-            # Store the Q-value for the selected action (assuming there's only one action)
-            q_values_grid[i][j] = q_values[0]
-            if (i,j) in legal_actions:
-                if (i,j) == action:
-                    plt.gca().add_patch(plt.Rectangle((j - 0.5, i - 0.5), 1, 1, color='red', fill=False))
-                else:
-                    plt.gca().add_patch(plt.Rectangle((j - 0.5, i - 0.5), 1, 1, color='black', fill=False))
-            elif game_state.board[i][j] > 0:
-                plt.gca().add_patch(plt.Circle((j, i), 0.4, color='grey', fill=True))
+    plt.figure()
+    image = plt.imshow(
+        values_grid, cmap="viridis", interpolation="nearest"
+    )
+    finite_values = values_grid[np.isfinite(values_grid)]
+    if finite_values.size:
+        image.set_clim(finite_values.min(), finite_values.max())
 
-    # Plot the heatmap
-    plt.imshow(q_values_grid, cmap='viridis', interpolation='nearest')
-    plt.title('Q-Values Heatmap')
-    plt.colorbar(label='Q-Values')
+    axis = plt.gca()
+    axis.set_xlim(-0.5, state_size - 0.5)
+    axis.set_ylim(state_size - 0.5, -0.5)
+    axis.set_xticks(np.arange(-0.5, state_size, 1), minor=True)
+    axis.set_yticks(np.arange(-0.5, state_size, 1), minor=True)
+    axis.grid(
+        which="minor", color="black", linestyle="-", linewidth=0.8, zorder=0.5
+    )
+    axis.tick_params(which="minor", bottom=False, left=False)
+
+    for row in range(state_size):
+        for col in range(state_size):
+            cell = game_state.board[row][col]
+            if cell != 0:
+                axis.add_patch(
+                    plt.Circle(
+                        (col, row), 0.4, color="gray", fill=True
+                    )
+                )
+
+            if (row, col) == action:
+                axis.add_patch(
+                    plt.Rectangle(
+                        (col - 0.5, row - 0.5),
+                        1,
+                        1,
+                        color="red",
+                        fill=False,
+                        linewidth=3,
+                    )
+                )
+
+    if value_source == "value_model":
+        title = "Model Values"
+    elif value_source == "mcts":
+        title = "MCTS Values"
+    elif value_source == "random":
+        value_label = (
+            "Value Model" if getattr(agent, "value_model_ready", False)
+            else "MCTS"
+        )
+        title = f"Random Selection ({value_label} Values)"
+    else:
+        title = "Move Values"
+
+    plt.title(title)
+    colorbar = plt.colorbar(image)
+    colorbar.set_label("Value Scale")
+    plt.xticks(range(state_size))
+    plt.yticks(range(state_size))
+    axis.set_aspect("equal")
     plt.show()
 
 
@@ -49,8 +91,8 @@ if __name__ == "__main__":
     othello_state.board[4][3] = 1
     othello_state.board[4][4] = 2
 
-    # Load a trained model
-    agent.load_model('agent_model.keras')
+    # Load the current medium-difficulty model.
+    agent.load_model('agent_model_1000.keras')
 
-    # Visualize Q-values
+    # Visualize values for legal moves.
     visualize_agent(agent, othello_state)

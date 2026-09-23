@@ -4,7 +4,7 @@
 
 This is an Othello (Reversi) implementation featuring:
 - **Visual gameplay** using Python's `turtle` graphics
-- **AI opponent** using Monte Carlo Tree Search (MCTS), with neural-network self-play training
+- **AI opponent** using a neural-network value model for move selection, with Monte Carlo Tree Search (MCTS) for self-play training and fallback decisions
 - **Training capability** to improve the AI through self-play
 
 ---
@@ -18,9 +18,9 @@ This is an Othello (Reversi) implementation featuring:
 | `board.py` | Base `Board` class: board representation, drawing, coordinate conversion |
 | `othello.py` | `Othello` class (inherits `Board`): game logic, move validation, tile flipping |
 | `mcts.py` | Monte Carlo Tree Search implementation with `Node` class |
-| `agent.py` | `OthelloAgent`: neural network + MCTS for AI decision-making |
+| `agent.py` | `OthelloAgent`: value-model training, batched move evaluation, and MCTS fallback |
 | `play_game.py` | `OthelloGame`: main entry point, orchestrates human vs AI gameplay |
-| `agent_visualizer.py` | Debug tool to visualize Q-values as heatmap |
+| `agent_visualizer.py` | Debug tool to visualize scalar value estimates as a heatmap |
 
 ---
 
@@ -79,7 +79,7 @@ For each direction with tiles to flip:
 Scans entire board for legal moves
 
 #### `play(x, y)` (visual mode)
-Human clicks → `get_coord` converts to (row,col) → validates → makes move → computer's turn (random move) → repeat
+Human clicks → `get_coord` converts to (row,col) → validates → makes move → computer evaluates its turn with the value model or MCTS fallback → repeat
 
 ---
 
@@ -87,20 +87,21 @@ Human clicks → `get_coord` converts to (row,col) → validates → makes move 
 
 ### `MonteCarloTreeSearch` Class
 - `exploration_constant`: UCB1 exploration weight (default ~1.41)
-- `agent`: Optional `OthelloAgent` for NN-guided rollouts
+- `agent`: Optional `OthelloAgent` for guided rollouts; the default agent uses random rollouts
+- `root_player`: The player at the search root; all rollout values are stored from this player's perspective
 
 ### `search(root_state, num_simulations)`
-1. Create root `Node` from `root_state`
+1. Capture the root player and create the root `Node`.
 2. Loop `num_simulations` times:
-   - **Selection**: Traverse tree via UCB1 until terminal or unexpanded node
-   - **Expansion**: Pick random untried action, create child node
-   - **Simulation**: Play out game to terminal (random or NN-guided)
-   - **Backpropagation**: Update visit counts and values up the tree
-3. Return best action from root (highest average value)
+   - **Selection**: Traverse fully expanded nodes via UCB1 until a terminal or unexpanded node
+   - **Expansion**: Pick a random untried action, deep-copy the state, apply the move, and switch player
+   - **Simulation**: Play to a terminal state using random or guided rollouts
+   - **Backpropagation**: Add the root-player value to every node on the path
+3. Return the root action with the highest value for the root player; opponent nodes select the child that minimizes that value
 
 ### `Node` Class
 Represents a game state in the search tree:
-- `state`: `Othello` instance (deep-copied)
+- `state`: `Othello` instance; expansion and simulation deep-copy it to avoid mutating the live game
 - `parent`, `action`, `children`
 - `visits`, `value` (accumulated reward)
 - Methods: `is_terminal()`, `is_fully_expanded()`, `get_untried_actions()`, `update()`, `get_value()`
@@ -115,7 +116,7 @@ Game is over when:
 reward = (root_player_tiles - opponent_tiles) / n²  # from the search root player's perspective
 ```
 
-Used by MCTS rollouts so selection remains correct when either player is at the root. Training rewards are separately normalized to `[-1, 1]` and weighted from each recorded player's perspective.
+Used by MCTS rollouts so selection remains correct when either player is at the root. Values are normalized to `[-1, 1]`; during selection, opponent nodes minimize the root-player value.
 ---
 
 ## Neural Network Agent (`agent.py`)
@@ -123,7 +124,8 @@ Used by MCTS rollouts so selection remains correct when either player is at the 
 ### `OthelloAgent` Class
 - `exploration_constant`, `num_simulations` for MCTS
 - `random_mode`: When `True`, `determine_next_move()` returns random legal actions (set for easy difficulty)
-- `model`: Keras Sequential neural network
+- `model`: Keras Sequential neural-network value model
+- `value_model_ready`: `False` for a new or loaded legacy model; set to `True` after value-model training in the current session
 - `mcts`: `MonteCarloTreeSearch` instance (random rollouts for training/fallback; optional agent-guided rollouts via `agent=self`)
 
 ### Network Architecture
@@ -133,6 +135,8 @@ Flatten → Dense(512, relu) → Dense(1024, relu) → Dense(1, linear)
 Output: Single scalar value estimate for a resulting board state
 Loss: MSE, Optimizer: Adam
 ```
+
+The scalar output is a board-value estimate, not an action-coordinate prediction. Training therefore records the board **after** each move and uses the final outcome as a signed target from the mover's perspective. This makes the training objective match inference, where each legal move is evaluated by the value of its resulting board.
 
 ### `get_state_representation(othello_state)`
 Converts `board` (8x8) to (8, 8, 1) numpy array for model input
@@ -159,6 +163,7 @@ Self-play training loop:
    - Each target is the final outcome from the mover's perspective
 6. Train model: `model.fit(states, targets, epochs=1)`
    - The network learns a bounded value estimate for resulting board states
+   - Targets, rather than signed sample weights, encode each mover's perspective
    - When `draw=True`, the board is redrawn between episodes for debugging.
 
 ### `determine_next_move(othello_state)`
@@ -168,6 +173,12 @@ Self-play training loop:
 4. Restore the original state and return the legal action with the highest predicted value.
 5. If no value model is ready, use MCTS from the current player's perspective as a fallback.
 
+### Model lifecycle
+- A newly constructed agent starts with `value_model_ready = False`.
+- `train_agent()` sets it to `True` after fitting value targets.
+- `load_model()` resets it to `False` because previously saved models may use the older training objective.
+- `determine_next_move()` therefore uses the value model only after a compatible model has been trained in the current session; otherwise it uses MCTS.
+
 ---
 
 ## Game Flow (`play_game.py`)
@@ -176,7 +187,7 @@ Self-play training loop:
 1. **Easy**: set `agent.random_mode = True`, skip model loading, use random selection
 2. **Medium**: load `agent_model_1000.keras`, optionally train and save
 3. **Hard**: load `agent_model_10000.keras`, optionally train and save
-4. If `train=True` and no model exists: train fresh model, save to difficulty's file
+4. If `train=True`: load an existing model when available, train value targets, and save the result; if no model exists, train a fresh model
 5. Draw board via turtle, initialize 4 center tiles
 6. Set `current_player = 0` (human), bind `play()` to click events
 7. Enter `turtle.mainloop()`
@@ -190,7 +201,7 @@ Self-play training loop:
 **Computer turn:**
 - Set `current_player = 1`
 - While computer has legal moves:
-  - Get move from `agent.determine_next_move(game)`
+  - Get move from `agent.determine_next_move(game)`; stop the computer loop if no move is available
   - Apply move via `make_move()`
   - Switch to human, check if human has moves → break
   - Else switch back to computer (continue loop)
@@ -210,7 +221,7 @@ Critical optimization: both `make_move(draw=False)` and `flip_tiles(draw=False)`
 ## Key Design Patterns
 
 1. **Inheritance**: `Othello` extends `Board` for graphics + game logic separation
-2. **State copying**: `deepcopy` used extensively in MCTS/agent to avoid mutation bugs
+2. **State isolation**: MCTS deep-copies search states; value-model inference snapshots and restores the live board, tile counts, player, and pending move
 3. **Player switching**: Explicit `current_player = 1 - current_player` (not automatic in `make_move`)
 4. **Pass handling**: When player has no moves, switch to opponent; game ends only when both pass
 5. **Value-model inference**: Agent evaluates legal resulting states in one batch; MCTS is used for training and fallback decisions
@@ -229,7 +240,7 @@ Critical optimization: both `make_move(draw=False)` and `flip_tiles(draw=False)`
 | Draw board during training | `draw=True` in `train_agent()` via `run()` |
 | AI difficulty (model file) | `difficulty` parameter in `run()`: `easy` (random), `medium` (`agent_model_1000.keras`), `hard` (`agent_model_10000.keras`) |
 | Random mode for easy | `agent.random_mode = True` in `run()` |
-| Reward function | `simulation()` in `mcts.py`, reward calc in `train_agent()` |
+| Reward/value function | `simulation()` in `mcts.py` and terminal-value targets in `train_agent()` |
 | Visualization | `agent_visualizer.py` |
 
 ---

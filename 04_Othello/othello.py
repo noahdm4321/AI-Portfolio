@@ -44,6 +44,14 @@ class Othello(Board):
         self.current_player = 0
         self.num_tiles = [2, 2]
 
+    def clone(self):
+        cloned = Othello(self.n)
+        cloned.board = [row[:] for row in self.board]
+        cloned.current_player = self.current_player
+        cloned.num_tiles = self.num_tiles[:]
+        cloned.move = self.move
+        return cloned
+
     def initialize_board(self):
         ''' Method: initialize_board
             Parameters: self

@@ -1,6 +1,5 @@
 import random
 import numpy as np
-from copy import deepcopy
 from othello import Othello
 
 class MonteCarloTreeSearch:
@@ -14,11 +13,12 @@ class MonteCarloTreeSearch:
 
     Methods:
     - search(root_state, num_simulations): Performs Monte Carlo Tree Search to find the best action.
+    - search_with_values(root_state, num_simulations): Returns the best action and root-player values.
     - selection(node): Selects the best child node until a terminal or unexpanded node is reached.
     - expansion(node): Expands the tree by adding a child node for an untried action.
     - simulation(node): Simulates a game from the given node until a terminal state is reached.
     - backpropagation(node, result): Backpropagates the result of a simulation up the tree.
-    - best_child(node): Selects the best child based on the UCB1 formula.
+    - best_child(node): Selects a child using UCB1 or exploitation-only scoring.
     """
     def __init__(self, exploration_constant, agent=None):
         # Initialize the Monte Carlo Tree Search with an exploration constant
@@ -27,21 +27,37 @@ class MonteCarloTreeSearch:
 
     def search(self, root_state: Othello, num_simulations):
         """Perform Monte Carlo Tree Search to find the best action."""
+        action, _ = self.search_with_values(root_state, num_simulations)
+        return action
+
+    def search_with_values(self, root_state: Othello, num_simulations):
+        """Search and return the root action values from the root player's perspective."""
+        root_player = root_state.current_player
         root_node = Node(root_state)
+        legal_actions = root_node.get_legal_actions()
+        if not legal_actions:
+            return None, {}
+
         for _ in range(num_simulations):
-            selected_node = self.selection(root_node)
+            selected_node = self.selection(root_node, root_player)
             expanded_node = self.expansion(selected_node)
-            simulation_result = self.simulation(expanded_node)
+            simulation_result = self.simulation(expanded_node, root_player)
             self.backpropagation(expanded_node, simulation_result)
 
-        # Return the action with the highest average value
-        best_child = self.best_child(root_node)
-        return best_child.action
+        values = {
+            child.action: child.get_value()
+            for child in root_node.children
+            if child.action is not None
+        }
+        best_child = self.best_child(
+            root_node, root_player, use_exploration=False
+        )
+        return (best_child.action if best_child is not None else None), values
 
-    def selection(self, node):
+    def selection(self, node, root_player):
         """Select the best child node until a terminal or unexpanded node is reached."""
         while not node.is_terminal() and node.is_fully_expanded():
-            child = self.best_child(node)
+            child = self.best_child(node, root_player)
             if child is None:
                 break
             node = child
@@ -52,7 +68,7 @@ class MonteCarloTreeSearch:
         legal_actions = node.get_untried_actions()
         if legal_actions:
             action = random.choice(legal_actions)
-            new_state = deepcopy(node.get_state())
+            new_state = node.get_state().clone()
 
             # Play the selected action (includes tile flipping via make_move).
             # Set self.move so make_move / flip_tiles can access it.
@@ -68,20 +84,25 @@ class MonteCarloTreeSearch:
         else:
             return node
 
-    def simulation(self, node):
+    def simulation(self, node, root_player):
         """Simulate a game from the given node until a terminal state is reached.
 
         When an agent is configured (self.agent is not None), each rollout step
-        uses the agent's trained neural network via determine_next_move() to
-        select actions instead of uniform random selection.
+        uses the agent's move selector instead of uniform random selection.
+        The returned reward is always from the root player's perspective.
         """
-        state = deepcopy(node.get_state())
+        state = node.get_state().clone()
 
         while sum(state.num_tiles) < state.n ** 2:
             legal_actions = state.get_legal_moves()
             if legal_actions:
-                if self.agent is not None:
+                if (
+                    self.agent is not None
+                    and getattr(self.agent, "mcts", None) is not self
+                ):
                     action = self.agent.determine_next_move(state)
+                    if action not in legal_actions:
+                        action = random.choice(legal_actions)
                 else:
                     action = random.choice(legal_actions)
 
@@ -100,13 +121,11 @@ class MonteCarloTreeSearch:
                 if not state.has_legal_move():
                     break
 
-        # Calculate reward based on final tile count difference
-        player_tiles = sum(row.count(1) for row in state.board)
-        opponent_tiles = sum(row.count(2) for row in state.board)
-        # Possibly want to add rewards for getting corner and edge tiles
-        reward = player_tiles - opponent_tiles
-
-        return reward
+        player_tiles = sum(row.count(root_player + 1) for row in state.board)
+        opponent_tiles = sum(
+            row.count((root_player + 1) % 2 + 1) for row in state.board
+        )
+        return (player_tiles - opponent_tiles) / (state.n ** 2)
 
     def backpropagation(self, node, result):
         """Backpropagate the result of a simulation up the tree."""
@@ -114,12 +133,29 @@ class MonteCarloTreeSearch:
             node.update(result)
             node = node.parent
 
-    def best_child(self, node):
-        """Select the best child based on UCB1 formula."""
+    def best_child(self, node, root_player=None, use_exploration=True):
+        """Select the best child based on UCB1, or exploitation-only at the root."""
         children = node.children
         if not children:
             return None
-        return max(children, key=lambda child: child.get_value() + self.exploration_constant * np.sqrt( np.log(node.visits) / (child.visits + 1e-6))) # Avoid division by zero
+
+        if root_player is None:
+            root_player = node.state.current_player
+
+        parent_sign = 1 if node.state.current_player == root_player else -1
+        parent_visits = max(node.visits, 1)
+        return max(
+            children,
+            key=lambda child: (
+                parent_sign * child.get_value()
+                + (
+                    self.exploration_constant
+                    * np.sqrt(np.log(parent_visits) / (child.visits + 1e-6))
+                    if use_exploration
+                    else 0.0
+                )
+            ),
+        )
 
 
 class Node:
@@ -155,7 +191,7 @@ class Node:
 
     def is_terminal(self):
         """Check if the node represents a terminal state in Othello.
-        
+
         In Othello, the game is over when the board is full OR when neither
         player can make a legal move (a player with no moves must 'pass' and
         the opponent gets a turn; only when both pass consecutively is the
