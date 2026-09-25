@@ -23,47 +23,51 @@ class OthelloGame:
         self.agent = OthelloAgent()
         self.user_score = 0
         self.computer_score = 0
+        self.visualize_during_play = False
 
-    def run(self, train=False, draw=False, difficulty="easy"):
+    def run(self, train=False, draw=False, difficulty="easy", visualize=False):
         ''' Method: run
             Parameters: self, train, draw
         Returns: nothing
             Does: Load existing agent model. If new model requested, train new model and save it. Then draws the board and start the game, sets the user to be the first player, and then alternate back and forth between the user and the computer until the game is over.
         '''
-        if difficulty == "easy":
-            self.agent.random_mode = True
-            print("Easy mode: using random selection.")
-        elif difficulty == "medium":
+        if difficulty == "medium":
             filepath = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'agent_model_1000.keras')
             try:
                 self.agent.load_model(filepath)
                 print("Loaded existing model.")
                 if train:
-                    self.agent.train_agent(draw=draw)
-                    print("New medium model trained.")
-                print("Finished! Let's play.")
+                    self.agent.train_agent(draw=draw, num_episodes=1000)
+                    self.agent.save_model(filepath)
+                    print("New medium model trained and saved.")
             except (ValueError):
                 print("No existing model found!")
                 self.agent.train_agent(num_episodes=1000)
                 self.agent.save_model(filepath)
                 print("New medium model trained and saved.")
-                print("Finished! Let's play.")
         elif difficulty == "hard":
             filepath = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'agent_model_10000.keras')
             try:
                 self.agent.load_model(filepath)
                 print("Loaded existing model.")
                 if train:
-                    self.agent.train_agent(draw=draw)
-                    print("New hard model trained.")
-                print("Finished! Let's play.")
+                    self.agent.train_agent(draw=draw, num_episodes=10000)
+                    self.agent.save_model(filepath)
+                    print("New hard model trained and saved.")
             except (ValueError):
                 print("No existing model found!")
                 self.agent.train_agent(num_episodes=10000)
                 self.agent.save_model(filepath)
                 print("New hard model trained and saved.")
-                print("Finished! Let's play.")
+        else:
+            self.agent.random_mode = True
+            print("Easy mode: using random selection.")
 
+        self.visualize_during_play = viz
+        if self.visualize_during_play:
+            print("Visualizer enabled for game play.")
+
+        print("Finished! Let's play.")
         print("Draw Board")
         self.game.draw_board()
         self.game.initialize_board()
@@ -97,7 +101,8 @@ class OthelloGame:
             computer_move = self.agent.determine_next_move(self.game)
             if computer_move is None:
                 break
-            # visualize(self.agent, self.game, computer_move)  # Uncomment to visualize decision values for each move.
+            if self.visualize_during_play:
+                visualize(self.agent, self.game, computer_move)
 
             # Make the move on the board
             self.game.move = computer_move
@@ -158,17 +163,20 @@ if __name__ == "__main__":
     else:
         difficulty = "hard"
 
+    viz_choice = input("Show visualizer during game play? [no]: ").lower()
+    viz = viz_choice in ["yes", "y"] 
+
     if difficulty == "easy":
         print("Easy mode: using random selection. Let's play.")
         game = OthelloGame()
-        game.run(difficulty="easy")
+        game.run(difficulty="easy", visualize=visualize)
     else:
-        choice = input("Do you want to train a new AI? [yes]: ").lower()
-        if choice in ["yes", "y", ""]:
+        choice = input("Do you want to train a new AI? [no]: ").lower()
+        if choice in ["yes", "y"]:
             draw_choice = input("Draw board during training? [no]: ").lower()
             draw = draw_choice in ["yes", "y"]
             game = OthelloGame()
-            game.run(train=True, difficulty=difficulty, draw=draw)
+            game.run(train=True, difficulty=difficulty, draw=draw, visualize=visualize)
         else:
             game = OthelloGame()
-            game.run(difficulty=difficulty)
+            game.run(difficulty=difficulty, visualize=visualize)

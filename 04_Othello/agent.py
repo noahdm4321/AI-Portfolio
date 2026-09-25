@@ -43,7 +43,7 @@ class OthelloAgent:
         """Create the neural network model for the AI agent using Keras."""
         # Define a simple feedforward neural network using Keras
         model = keras.Sequential([
-            layers.Flatten(input_shape=(8, 8)),
+            layers.Flatten(input_shape=(8, 8, 2)),
             layers.Dense(512, activation='relu'),
             layers.Dense(1024, activation='relu'),
             layers.Dense(1, activation='linear')
@@ -54,8 +54,19 @@ class OthelloAgent:
         return model
 
     def get_state_representation(self, othello_state):
-        """Convert Othello state to a format suitable for input to the neural network"""
-        return np.array(othello_state.board).reshape((8, 8, 1))
+        """Convert Othello state to a format suitable for input to the neural network.
+
+        Returns an (8, 8, 2) tensor:
+          - Channel 0: 1 where the current player has pieces, 0 elsewhere
+          - Channel 1: 1 where the opponent has pieces, 0 elsewhere
+        """
+        current_player = othello_state.current_player
+        my_tile = current_player + 1
+        opp_tile = 1 - current_player + 1
+        board = np.array(othello_state.board, dtype=np.float32)
+        my_channel = (board == my_tile).astype(np.float32)
+        opp_channel = (board == opp_tile).astype(np.float32)
+        return np.stack([my_channel, opp_channel], axis=-1)
 
     @staticmethod
     def _state_key(othello_state):
