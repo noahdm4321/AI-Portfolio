@@ -37,7 +37,7 @@ class OthelloGame:
                 self.agent.load_model(filepath)
                 print("Loaded existing model.")
                 if train:
-                    self.agent.train_agent(draw=draw, num_episodes=1000)
+                    self.agent.train_agent(draw=draw)
                     self.agent.save_model(filepath)
                     print("New medium model trained and saved.")
             except (ValueError):
@@ -49,9 +49,11 @@ class OthelloGame:
             filepath = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'agent_model_10000.keras')
             try:
                 self.agent.load_model(filepath)
+                # Hard mode: defer to MCTS when the value model is uncertain.
+                self.agent.use_mcts_fallback = True
                 print("Loaded existing model.")
                 if train:
-                    self.agent.train_agent(draw=draw, num_episodes=10000)
+                    self.agent.train_agent(draw=draw)
                     self.agent.save_model(filepath)
                     print("New hard model trained and saved.")
             except (ValueError):

@@ -31,9 +31,13 @@ class OthelloAgent:
         self.num_simulations = num_simulations
         self.random_mode = False
         self.value_model_ready = False
+
         self.last_move_values = {}
         self.last_move_source = None
         self.last_move_state = None
+
+        self.use_mcts_fallback = False
+        self.certainty_threshold = 0.001
 
         # Build the neural network model and initialize Monte Carlo Tree Search
         self.model = self.create_model()
@@ -243,6 +247,17 @@ class OthelloAgent:
             return move
 
         values = self._predict_move_values(othello_state, legal_actions)
+        ranked = sorted(values.values(), reverse=True)
+        gap = (ranked[0] - ranked[1]) if len(ranked) >= 2 else 0.0
+
+        # Defer to MCTS when certainty is below threshold.
+        if self.use_mcts_fallback and gap < self.certainty_threshold:
+            move, mcts_values = self.mcts.search_with_values(
+                othello_state, self.num_simulations
+            )
+            self._cache_move_values(othello_state, mcts_values, "mcts")
+            return move
+
         move = max(legal_actions, key=values.get)
         self._cache_move_values(othello_state, values, "value_model")
         return move
